@@ -1622,11 +1622,14 @@ if('serviceWorker' in navigator){
 
 // BOOTSTRAP
 (async()=>{
-  const url=localStorage.getItem('mf_url');const key=localStorage.getItem('mf_key');
+  const DEFAULT_URL='https://jrrxlxhwqluhknpyfvzv.supabase.co';
+  const DEFAULT_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpycnhseGh3cWx1aGtucHlmdnp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNTAwMDksImV4cCI6MjA5NDYyNjAwOX0.QAmjV3JVSlOcJxfVji8WrN4vUtL1T4PwHeqJOJLdJO4';
+  const url=localStorage.getItem('mf_url')||DEFAULT_URL;
+  const key=localStorage.getItem('mf_key')||DEFAULT_KEY;
+  localStorage.setItem('mf_url',url);localStorage.setItem('mf_key',key);
   const el=document.getElementById('setup-sql');if(el)el.textContent=SETUP_SQL;
-  if(!url||!key){showSetup();return}
   try{S.sb=window.supabase.createClient(url,key);const{data:{session}}=await S.sb.auth.getSession();if(session){S.user=session.user;await initApp()}else{showAuth()}}
-  catch(e){showSetup()}
+  catch(e){showAuth()}
 })();
 </script>
 </body>
