@@ -300,6 +300,7 @@ input,select,textarea{font-family:var(--font)}
       <div class="menu-item" onclick="navigate('budget')"><div class="menu-item-icon">🎯</div><div class="menu-item-label">Orçamento</div></div>
       <div class="menu-item" onclick="navigate('bills')"><div class="menu-item-icon">📅</div><div class="menu-item-label">A Pagar/Receber</div></div>
       <div class="menu-item" onclick="navigate('goals')"><div class="menu-item-icon">🏆</div><div class="menu-item-label">Metas</div></div>
+      <div class="menu-item" onclick="navigate('calculator')"><div class="menu-item-icon">🧮</div><div class="menu-item-label">Calculadora</div></div>
     </div>
     <div class="section-hdr"><h2>Dados e conta</h2></div>
     <div class="menu-grid">
@@ -366,6 +367,72 @@ input,select,textarea{font-family:var(--font)}
     <div id="bills-list" class="card fade-in" style="margin:12px 16px"></div>
   </div>
 
+  <!-- CALCULATOR -->
+  <div class="screen" id="screen-calculator">
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div class="card card-pad">
+        <div style="font-size:15px;font-weight:800;margin-bottom:14px">🧮 Simulador de investimento</div>
+        <div class="form-group">
+          <label class="form-label">Tipo de rendimento</label>
+          <select class="form-input form-select" id="calc-type" onchange="calcUpdateUI()">
+            <option value="month">% ao mês</option>
+            <option value="year">% ao ano</option>
+            <option value="cdi">% do CDI</option>
+            <option value="compound">Juros compostos (personalizado)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Valor aplicado (R$)</label>
+            <input class="form-input" id="calc-pv" type="number" step="0.01" placeholder="10000,00" oninput="calcRun()">
+          </div>
+          <div class="form-group">
+            <label class="form-label" id="calc-rate-label">Taxa (% ao mês)</label>
+            <input class="form-input" id="calc-rate" type="number" step="0.001" placeholder="1,0" oninput="calcRun()">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Prazo (meses)</label>
+            <input class="form-input" id="calc-months" type="number" step="1" min="1" placeholder="12" oninput="calcRun()">
+          </div>
+          <div class="form-group" id="calc-cdi-wrap" style="display:none">
+            <label class="form-label">CDI atual (% a.a.)</label>
+            <input class="form-input" id="calc-cdi" type="number" step="0.01" placeholder="10.50" value="10.50" oninput="calcRun()">
+          </div>
+        </div>
+        <div id="calc-result" style="display:none;margin-top:4px;background:var(--primary-xlight);border:1px solid var(--primary-light);border-radius:var(--r);padding:16px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase">Valor final</div><div style="font-size:22px;font-weight:900;color:var(--primary)" id="calc-fv">—</div></div>
+            <div><div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase">Rendimento</div><div style="font-size:22px;font-weight:900;color:var(--income)" id="calc-gain">—</div></div>
+            <div><div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase">Rentabilidade total</div><div style="font-size:18px;font-weight:800" id="calc-pct">—</div></div>
+            <div><div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase">Taxa mensal equiv.</div><div style="font-size:18px;font-weight:800" id="calc-monthly">—</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-pad">
+        <div style="font-size:15px;font-weight:800;margin-bottom:14px">🔍 Verificar anúncio do banco</div>
+        <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;line-height:1.6">O banco prometeu um valor final? Digite abaixo para ver se bate com o cálculo.</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Valor final prometido</label>
+            <input class="form-input" id="calc-promised" type="number" step="0.01" placeholder="11200,00" oninput="calcVerify()">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="opacity:0">.</label>
+            <div id="calc-verify-result" style="height:44px;display:flex;align-items:center;font-size:14px;font-weight:700"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-pad" id="calc-table-wrap" style="display:none">
+        <div style="font-size:14px;font-weight:800;margin-bottom:10px">📅 Evolução mensal</div>
+        <div style="overflow-x:auto"><table id="calc-table" style="width:100%;border-collapse:collapse;font-size:12px"></table></div>
+      </div>
+    </div>
+  </div>
+
   <!-- GOALS -->
   <div class="screen" id="screen-goals">
     <div style="padding:14px 16px;background:var(--bg-card);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
@@ -396,6 +463,22 @@ input,select,textarea{font-family:var(--font)}
           <input type="file" id="me-file" accept=".xls,.xlsx" style="display:none" onchange="handleMEFile(this)">
         </div>
         <div id="me-preview" style="display:none;margin-top:12px"></div>
+      </div>
+
+      <!-- OFX IMPORTER -->
+      <div class="card card-pad">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="font-size:22px">🏦</div>
+          <div style="font-size:15px;font-weight:800">Importar extrato OFX do banco</div>
+        </div>
+        <p style="font-size:13px;color:var(--text-2);margin-bottom:14px;line-height:1.6">No seu internet banking vá em <strong>Extrato → Exportar → OFX</strong>. Suportado por Itaú, Bradesco, BB, Caixa, Nubank, Santander e outros.</p>
+        <div class="drop-zone" id="ofx-drop" onclick="document.getElementById('ofx-file').click()">
+          <div style="font-size:32px;margin-bottom:8px">🏦</div>
+          <div style="font-weight:800;margin-bottom:4px">Arquivo .ofx do banco</div>
+          <div style="font-size:13px;color:var(--text-3)">Arraste ou clique para selecionar</div>
+          <input type="file" id="ofx-file" accept=".ofx,.qfx,.ofc" style="display:none" onchange="handleOFXFile(this)">
+        </div>
+        <div id="ofx-preview" style="display:none;margin-top:12px"></div>
       </div>
 
       <!-- GENERIC CSV IMPORTER -->
@@ -467,6 +550,16 @@ input,select,textarea{font-family:var(--font)}
         <div class="form-group"><label class="form-label">Conta padrão — Receitas</label><select class="form-input form-select" id="sett-default-income"></select></div>
         <div class="form-group"><label class="form-label">Conta padrão — Despesas</label><select class="form-input form-select" id="sett-default-expense"></select></div>
         <button class="btn btn-primary btn-full" onclick="saveSettings()">Salvar configurações</button>
+      </div>
+      <div class="card card-pad">
+        <div style="font-size:15px;font-weight:800;margin-bottom:12px">🔔 Notificações</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-size:14px;font-weight:700">Aviso de vencimento</div>
+            <div style="font-size:12px;color:var(--text-3)" id="notif-status">Avisa 2 dias antes das contas</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-notif" onclick="toggleNotifications()">Ativar</button>
+        </div>
       </div>
       <div class="card card-pad">
         <div style="font-size:15px;font-weight:800;margin-bottom:8px">Conta</div>
@@ -834,6 +927,7 @@ async function doSignOut(){
 async function initApp(){
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='block';
+  setTimeout(()=>checkBillNotifications(),3000); // checa 3s após login
   await loadAll();navigate('dashboard');
 }
 async function loadAll(){await Promise.all([loadAccounts(),loadCategories(),loadTransactions(),loadCards(),loadInvestments(),loadBudgets(),loadSettings(),loadGoals()])}
@@ -901,8 +995,8 @@ function catTotals(m,y){
 function last6Months(){const r=[];let m=S.month,y=S.year;for(let i=0;i<6;i++){r.unshift({m,y});m--;if(m===0){m=12;y--}}return r}
 
 // NAVIGATION
-const BACK={accounts:'menu',categories:'menu',cards:'menu',investments:'menu',budget:'menu',bills:'menu',import:'menu',backup:'menu',settings:'menu',goals:'menu'};
-const TITLES={accounts:'Contas',categories:'Categorias',cards:'Cartões de crédito',investments:'Investimentos',budget:'Orçamento',bills:'A Pagar / Receber',import:'Importar',backup:'Backup',settings:'Configurações',goals:'🏆 Metas de Economia'};
+const BACK={accounts:'menu',categories:'menu',cards:'menu',investments:'menu',budget:'menu',bills:'menu',import:'menu',backup:'menu',settings:'menu',goals:'menu',calculator:'menu'};
+const TITLES={accounts:'Contas',categories:'Categorias',cards:'Cartões de crédito',investments:'Investimentos',budget:'Orçamento',bills:'A Pagar / Receber',import:'Importar',backup:'Backup',settings:'Configurações',goals:'🏆 Metas de Economia',calculator:'🧮 Calculadora Financeira'};
 const MAIN=['dashboard','history','reports','menu'];
 function navigate(s){
   document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
@@ -912,7 +1006,7 @@ function navigate(s){
   const hdr=document.getElementById('top-header');
   if(MAIN.includes(s)){hdr.style.display='none'}
   else{hdr.style.display='flex';document.getElementById('hdr-back').style.display='block';document.getElementById('hdr-title').textContent=TITLES[s]||s;document.getElementById('hdr-actions').innerHTML=''}
-  const renders={dashboard:renderDash,history:renderHistory,reports:renderReports,accounts:renderAccounts,categories:renderCategories,cards:renderCards,investments:renderInvestments,budget:renderBudget,bills:renderBills,settings:renderSettings,menu:renderMenu,goals:renderGoals};
+  const renders={dashboard:renderDash,history:renderHistory,reports:renderReports,accounts:renderAccounts,categories:renderCategories,cards:renderCards,investments:renderInvestments,budget:renderBudget,bills:renderBills,settings:renderSettings,menu:renderMenu,goals:renderGoals,calculator:()=>{}};
   if(renders[s])renders[s]();
   if(el)el.scrollTo(0,0);
 }
@@ -1153,6 +1247,14 @@ function renderSettings(){
   document.getElementById('sett-default-income').innerHTML=opts;document.getElementById('sett-default-expense').innerHTML=opts;
   if(S.settings.default_income_account_id)document.getElementById('sett-default-income').value=S.settings.default_income_account_id;
   if(S.settings.default_expense_account_id)document.getElementById('sett-default-expense').value=S.settings.default_expense_account_id;
+  // Notificações
+  const ns=document.getElementById('notif-status');const nb=document.getElementById('btn-notif');
+  if(ns&&nb){
+    if(!('Notification' in window)){ns.textContent='Não suportado neste navegador';nb.style.display='none';}
+    else if(Notification.permission==='granted'){ns.textContent='✅ Ativado — avisa 2 dias antes';nb.textContent='Testar agora';}
+    else if(Notification.permission==='denied'){ns.textContent='❌ Bloqueado — libere nas config. do navegador';nb.textContent='Como liberar';nb.onclick=()=>toast('Configurações → Privacidade → Notificações','');}
+    else{ns.textContent='Avisa 2 dias antes das contas vencerem';nb.textContent='Ativar';}
+  }
 }
 async function saveSettings(){
   const data={user_id:S.user.id,first_day_of_month:+document.getElementById('sett-first-day').value,default_view:document.getElementById('sett-view').value,default_income_account_id:document.getElementById('sett-default-income').value||null,default_expense_account_id:document.getElementById('sett-default-expense').value||null};
@@ -1496,10 +1598,13 @@ function handleCSVFile(input){
   };reader.readAsText(file);
 }
 document.addEventListener('DOMContentLoaded',()=>{
-  const dz=document.getElementById('csv-drop');
-  if(dz){dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over')});dz.addEventListener('dragleave',()=>dz.classList.remove('over'));dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');const f=e.dataTransfer.files[0];if(f)handleCSVFile({files:[f]})})}
-  const me=document.getElementById('me-drop');
-  if(me){me.addEventListener('dragover',e=>{e.preventDefault();me.classList.add('over')});me.addEventListener('dragleave',()=>me.classList.remove('over'));me.addEventListener('drop',e=>{e.preventDefault();me.classList.remove('over');const f=e.dataTransfer.files[0];if(f)handleMEFile({files:[f]})})}
+  [['csv-drop',handleCSVFile],['me-drop',handleMEFile],['ofx-drop',handleOFXFile]].forEach(([id,fn])=>{
+    const dz=document.getElementById(id);
+    if(!dz)return;
+    dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over')});
+    dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+    dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');const f=e.dataTransfer.files[0];if(f)fn({files:[f]})});
+  });
 });
 
 // IMPORTADOR MINHAS ECONOMIAS
@@ -1831,6 +1936,172 @@ async function uploadAttachment(file,txId){
     const{data:{publicUrl}}=S.sb.storage.from('attachments').getPublicUrl(data.path);
     return publicUrl;
   }catch(e){console.error('Anexo:',e);return null;}
+}
+
+// OFX IMPORT
+function handleOFXFile(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const content=e.target.result;
+      const txs=parseOFX(content);
+      if(!txs.length){toast('Nenhuma transação encontrada no OFX','error');return}
+      showOFXPreview(txs);
+    }catch(err){toast('Erro ao ler OFX: '+err.message,'error')}
+  };
+  reader.readAsText(file,'latin1');
+}
+function parseOFX(content){
+  const getVal=(block,tag)=>{const m=block.match(new RegExp('<'+tag+'>([^<\n\r]+)','i'));return m?m[1].trim():''};
+  // Encontrar bloco de transações (SGML ou XML)
+  const listMatch=content.match(/<BANKTRANLIST>([\s\S]*?)(?:<\/BANKTRANLIST>|$)/i);
+  if(!listMatch)return[];
+  const list=listMatch[1];
+  // Separar cada STMTTRN
+  const blocks=list.split(/<STMTTRN>/i).slice(1);
+  return blocks.map(block=>{
+    const dtRaw=getVal(block,'DTPOSTED')||getVal(block,'DTUSER');
+    const amtRaw=getVal(block,'TRNAMT');
+    const memo=(getVal(block,'MEMO')||getVal(block,'NAME')||'Lançamento').replace(/&amp;/g,'&').replace(/&lt;/g,'<').slice(0,80);
+    const fitid=getVal(block,'FITID');
+    if(!dtRaw||!amtRaw)return null;
+    // Data: YYYYMMDD ou YYYYMMDDHHMMSS[timezone]
+    const y=dtRaw.slice(0,4),mo=dtRaw.slice(4,6),d=dtRaw.slice(6,8);
+    const date=`${y}-${mo}-${d}`;
+    const raw=parseFloat(amtRaw.replace(',','.'));
+    if(isNaN(raw)||raw===0)return null;
+    return{date,desc:memo,amount:Math.abs(raw),rawAmount:raw,type:raw>=0?'income':'expense',fitid};
+  }).filter(Boolean);
+}
+function showOFXPreview(txs){
+  const el=document.getElementById('ofx-preview');el.style.display='block';
+  const accOpts='<option value="new">✨ Criar nova conta</option>'+S.accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  const prev=txs.slice(0,6).map(t=>`<div class="tx-item">
+    <div class="tx-icon" style="background:var(--${t.type==='income'?'income':'expense'}-bg)">${t.type==='income'?'💚':'🔴'}</div>
+    <div class="tx-body"><div class="tx-desc">${t.desc}</div><div class="tx-meta">${t.date}</div></div>
+    <div class="tx-right"><div class="tx-amount ${t.type}">${t.type==='income'?'+':'−'}${fmt(t.amount)}</div></div>
+  </div>`).join('');
+  el.innerHTML=`<div style="background:var(--income-bg);border:1px solid var(--income-bd);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:12px;font-size:13px;font-weight:700">
+    ✅ <strong>${txs.length}</strong> transações encontradas no extrato OFX
+  </div>
+  <div style="margin-bottom:12px">
+    <div style="font-size:13px;font-weight:800;margin-bottom:8px">Qual conta é esse extrato?</div>
+    <select class="form-input form-select" id="ofx-acc-sel" style="height:44px">${accOpts}</select>
+  </div>
+  <div style="margin-bottom:14px">
+    <div style="font-size:13px;font-weight:800;margin-bottom:8px">Prévia (6 primeiras):</div>
+    <div class="card" style="overflow:hidden"><div class="tx-list">${prev}</div></div>
+  </div>
+  <button class="btn btn-primary btn-full btn-lg" id="btn-ofx-import" onclick="confirmOFXImport()">
+    ✅ Importar ${txs.length} lançamentos
+  </button>`;
+  window._ofxTxs=txs;
+}
+async function confirmOFXImport(){
+  const btn=document.getElementById('btn-ofx-import');
+  if(btn){btn.disabled=true;btn.textContent='Importando...';}
+  try{
+    let accId=document.getElementById('ofx-acc-sel').value;
+    if(accId==='new'){
+      const nm=prompt('Nome para a nova conta:');if(!nm)return;
+      const{data}=await S.sb.from('accounts').insert({user_id:S.user.id,name:nm,type:'checking',initial_balance:0,icon:'🏦',color:'#059669'}).select().single();
+      if(data){accId=data.id;S.accounts.push(data)}
+    }
+    const batch=window._ofxTxs.map(t=>({user_id:S.user.id,type:t.type,description:t.desc,amount:t.amount,account_id:accId,date_competence:t.date,date_cash:t.date,paid_at:t.date,status:t.type==='income'?'received':'paid',classification:'variable',include_in_reports:true,include_in_budget:true}));
+    let count=0;
+    for(let i=0;i<batch.length;i+=50){const{error}=await S.sb.from('transactions').insert(batch.slice(i,i+50));if(!error)count+=Math.min(50,batch.length-i);}
+    await loadAll();toast(`🎉 ${count} lançamentos importados!`,'success');
+    document.getElementById('ofx-preview').style.display='none';
+    document.getElementById('ofx-file').value='';
+    navigate('history');
+  }catch(err){toast('Erro: '+err.message,'error');if(btn){btn.disabled=false;btn.textContent='Tentar novamente';}}
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  const dz=document.getElementById('ofx-drop');
+  if(dz){dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over')});dz.addEventListener('dragleave',()=>dz.classList.remove('over'));dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');const f=e.dataTransfer.files[0];if(f)handleOFXFile({files:[f]}})}
+});
+
+// CALCULADORA FINANCEIRA
+function calcUpdateUI(){
+  const type=document.getElementById('calc-type')?.value;
+  const lbl=document.getElementById('calc-rate-label');
+  const cdiWrap=document.getElementById('calc-cdi-wrap');
+  if(!lbl)return;
+  if(type==='month'){lbl.textContent='Taxa (% ao mês)';if(cdiWrap)cdiWrap.style.display='none';}
+  else if(type==='year'){lbl.textContent='Taxa (% ao ano)';if(cdiWrap)cdiWrap.style.display='none';}
+  else if(type==='cdi'){lbl.textContent='% do CDI (ex: 100 = 100%)';if(cdiWrap)cdiWrap.style.display='block';}
+  else{lbl.textContent='Taxa (% ao período)';if(cdiWrap)cdiWrap.style.display='none';}
+  calcRun();
+}
+function calcRun(){
+  const type=document.getElementById('calc-type')?.value;
+  const pv=parseFloat(document.getElementById('calc-pv')?.value)||0;
+  const rateInput=parseFloat(document.getElementById('calc-rate')?.value)||0;
+  const months=parseInt(document.getElementById('calc-months')?.value)||0;
+  const cdiAnual=parseFloat(document.getElementById('calc-cdi')?.value)||10.50;
+  if(!pv||!rateInput||!months){document.getElementById('calc-result').style.display='none';document.getElementById('calc-table-wrap').style.display='none';return}
+  // Converter taxa para mensal
+  let rMes;
+  if(type==='month') rMes=rateInput/100;
+  else if(type==='year') rMes=Math.pow(1+rateInput/100,1/12)-1;
+  else if(type==='cdi') rMes=Math.pow(1+cdiAnual/100,1/12)-1;
+  else rMes=rateInput/100;
+  // Aplicar % CDI
+  if(type==='cdi') rMes=rMes*(rateInput/100);
+  // Calcular
+  const fv=pv*Math.pow(1+rMes,months);
+  const gain=fv-pv;
+  const pct=(gain/pv)*100;
+  document.getElementById('calc-fv').textContent=fmt(fv);
+  document.getElementById('calc-gain').textContent='+'+fmt(gain);
+  document.getElementById('calc-pct').textContent=pct.toFixed(2)+'%';
+  document.getElementById('calc-monthly').textContent=(rMes*100).toFixed(4)+'% a.m.';
+  document.getElementById('calc-result').style.display='block';
+  // Tabela mensal (até 24 meses)
+  if(months<=36){
+    let bal=pv;let rows='<tr style="background:var(--bg-hover)"><th style="padding:5px 8px;text-align:left;font-size:11px">Mês</th><th style="padding:5px 8px;text-align:right;font-size:11px">Saldo</th><th style="padding:5px 8px;text-align:right;font-size:11px">Rendimento</th></tr>';
+    for(let i=1;i<=months;i++){const prev=bal;bal=bal*(1+rMes);const g=bal-prev;rows+=`<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 8px;font-size:11px">${i}</td><td style="padding:4px 8px;text-align:right;font-size:11px;font-weight:700">${fmt(bal)}</td><td style="padding:4px 8px;text-align:right;font-size:11px;color:var(--income)">+${fmt(g)}</td></tr>`;}
+    document.getElementById('calc-table').innerHTML=rows;
+    document.getElementById('calc-table-wrap').style.display='block';
+  }else{document.getElementById('calc-table-wrap').style.display='none';}
+  calcVerify();
+}
+function calcVerify(){
+  const promised=parseFloat(document.getElementById('calc-promised')?.value)||0;
+  const fvEl=document.getElementById('calc-fv');
+  const resEl=document.getElementById('calc-verify-result');
+  if(!resEl)return;
+  if(!promised){resEl.textContent='';return}
+  const fv=parseFloat(document.getElementById('calc-pv')?.value||0)*Math.pow(1+(parseFloat(document.getElementById('calc-rate')?.value||0)/100),parseInt(document.getElementById('calc-months')?.value||0));
+  const diff=promised-fv;
+  const ok=Math.abs(diff)<0.50;
+  resEl.innerHTML=ok
+    ?`<span style="color:var(--income)">✅ Bate! Diferença: ${fmt(Math.abs(diff))}</span>`
+    :`<span style="color:var(--expense)">⚠️ Diferença: ${fmt(Math.abs(diff))}<br><span style="font-size:11px;font-weight:400">(${diff>0?'banco promete mais':'banco promete menos'} que o cálculo)</span></span>`;
+}
+
+// NOTIFICAÇÕES DE VENCIMENTO
+async function checkBillNotifications(){
+  if(!('Notification' in window)||Notification.permission!=='granted')return;
+  await loadTransactions(); // garante dados frescos
+  const td=today();
+  const in2=new Date();in2.setDate(in2.getDate()+2);const d2=in2.toISOString().split('T')[0];
+  const overdue=S.transactions.filter(t=>['pending','overdue','scheduled'].includes(t.status)&&t.type==='expense'&&(t.due_date||t.date_competence)<td);
+  const soon=S.transactions.filter(t=>['pending','scheduled'].includes(t.status)&&t.type==='expense'&&(t.due_date||t.date_competence)>=td&&(t.due_date||t.date_competence)<=d2);
+  if(overdue.length){
+    new Notification('⚠️ Minhas Finanças — Contas atrasadas',{body:`${overdue.length} conta${overdue.length>1?'s':''} em atraso: ${overdue.slice(0,2).map(t=>t.description).join(', ')}`,icon:'./icon-192.png',tag:'mf-overdue'});
+  }else if(soon.length){
+    new Notification('📅 Minhas Finanças — Vence em 2 dias',{body:`${soon.length} conta${soon.length>1?'s':''}: ${soon.slice(0,2).map(t=>t.description+' ('+fmt(t.amount)+')').join(', ')}`,icon:'./icon-192.png',tag:'mf-soon'});
+  }
+}
+async function toggleNotifications(){
+  if(!('Notification' in window)){toast('Notificações não suportadas neste navegador','error');return}
+  if(Notification.permission==='granted'){await checkBillNotifications();toast('Verificando vencimentos...','');return}
+  const r=await Notification.requestPermission();
+  renderSettings();
+  if(r==='granted'){toast('Notificações ativadas! 🔔','success');checkBillNotifications();}
+  else toast('Permissão negada pelo navegador','error');
 }
 
 // PDF EXPORT
