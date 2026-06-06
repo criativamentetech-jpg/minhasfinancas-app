@@ -2017,11 +2017,6 @@ async function confirmOFXImport(){
     navigate('history');
   }catch(err){toast('Erro: '+err.message,'error');if(btn){btn.disabled=false;btn.textContent='Tentar novamente';}}
 }
-document.addEventListener('DOMContentLoaded',()=>{
-  const dz=document.getElementById('ofx-drop');
-  if(dz){dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over')});dz.addEventListener('dragleave',()=>dz.classList.remove('over'));dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');const f=e.dataTransfer.files[0];if(f)handleOFXFile({files:[f]}})}
-});
-
 // CALCULADORA FINANCEIRA
 function calcUpdateUI(){
   const type=document.getElementById('calc-type')?.value;
