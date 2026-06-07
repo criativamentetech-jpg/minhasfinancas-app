@@ -17,7 +17,7 @@
 <link rel="manifest" href="./manifest.json">
 <meta name="apple-mobile-web-app-title" content="Finanças">
 <style>
-:root{--bg:#f0f4f8;--bg-card:#fff;--bg-input:#f8fafc;--bg-hover:#f1f5f9;--text:#0f172a;--text-2:#475569;--text-3:#94a3b8;--border:#e2e8f0;--primary:#059669;--primary-dark:#047857;--primary-light:#d1fae5;--primary-xlight:#ecfdf5;--income:#059669;--income-bg:#ecfdf5;--income-bd:#a7f3d0;--expense:#dc2626;--expense-bg:#fef2f2;--expense-bd:#fecaca;--transfer:#2563eb;--transfer-bg:#eff6ff;--transfer-bd:#bfdbfe;--invest:#7c3aed;--invest-bg:#f5f3ff;--invest-bd:#ddd6fe;--adjust:#d97706;--adjust-bg:#fffbeb;--adjust-bd:#fde68a;--shadow:0 4px 14px rgba(0,0,0,.07);--shadow-lg:0 10px 32px rgba(0,0,0,.1);--r:12px;--r-sm:8px;--r-lg:16px;--r-xl:24px;--nav-h:68px;--font:'Nunito',sans-serif}
+:root{--bg:#f0f4f8;--bg-card:#fff;--bg-input:#f8fafc;--bg-hover:#f1f5f9;--text:#0f172a;--text-2:#475569;--text-3:#94a3b8;--border:#e2e8f0;--primary:#059669;--primary-dark:#047857;--primary-light:#d1fae5;--primary-xlight:#ecfdf5;--income:#059669;--income-bg:#ecfdf5;--income-bd:#a7f3d0;--expense:#dc2626;--expense-bg:#fef2f2;--expense-bd:#fecaca;--transfer:#2563eb;--transfer-bg:#eff6ff;--transfer-bd:#bfdbfe;--invest:#7c3aed;--invest-bg:#f5f3ff;--invest-bd:#ddd6fe;--adjust:#d97706;--adjust-bg:#fffbeb;--adjust-bd:#fde68a;--estorno:#0891b2;--estorno-bg:#e0f2fe;--estorno-bd:#7dd3fc;--shadow:0 4px 14px rgba(0,0,0,.07);--shadow-lg:0 10px 32px rgba(0,0,0,.1);--r:12px;--r-sm:8px;--r-lg:16px;--r-xl:24px;--nav-h:68px;--font:'Nunito',sans-serif}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:15px;-webkit-tap-highlight-color:transparent}
 body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.5;min-height:100dvh}
@@ -73,7 +73,7 @@ input,select,textarea{font-family:var(--font)}
 .tx-meta{font-size:12px;color:var(--text-3);margin-top:1px}
 .tx-right{text-align:right;flex-shrink:0}
 .tx-amount{font-size:15px;font-weight:800}
-.tx-amount.income{color:var(--income)}.tx-amount.expense{color:var(--expense)}.tx-amount.transfer{color:var(--transfer)}.tx-amount.invest{color:var(--invest)}.tx-amount.adjust{color:var(--adjust)}
+.tx-amount.income{color:var(--income)}.tx-amount.expense{color:var(--expense)}.tx-amount.transfer{color:var(--transfer)}.tx-amount.invest{color:var(--invest)}.tx-amount.adjust{color:var(--adjust)}.tx-amount.estorno{color:var(--estorno)}
 .account-card{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--bg-card);border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
 .account-card:hover{background:var(--bg-hover)}
 .account-icon{width:42px;height:42px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
@@ -97,6 +97,7 @@ input,select,textarea{font-family:var(--font)}
 .type-tab.active[data-type="transfer"]{background:var(--transfer-bg);color:var(--transfer);border-color:var(--transfer-bd)}
 .type-tab.active[data-type="invest"]{background:var(--invest-bg);color:var(--invest);border-color:var(--invest-bd)}
 .type-tab.active[data-type="adjust"]{background:var(--adjust-bg);color:var(--adjust);border-color:var(--adjust-bd)}
+.type-tab.active[data-type="estorno"]{background:var(--estorno-bg);color:var(--estorno);border-color:var(--estorno-bd)}
 .filter-bar{display:flex;gap:8px;padding:10px 16px;overflow-x:auto;scrollbar-width:none;background:var(--bg-card);border-bottom:1px solid var(--border);flex-shrink:0}
 .filter-bar::-webkit-scrollbar{display:none}
 .filter-chip{padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;border:1.5px solid var(--border);background:transparent;color:var(--text-2);white-space:nowrap;cursor:pointer;transition:all .15s}
@@ -638,6 +639,7 @@ input,select,textarea{font-family:var(--font)}
     <button class="type-tab" data-type="transfer" onclick="setTxType('transfer',this)">🔵 Transferência</button>
     <button class="type-tab" data-type="invest" onclick="setTxType('invest',this)">🟣 Investimento</button>
     <button class="type-tab" data-type="adjust" onclick="setTxType('adjust',this)">⚡ Ajuste saldo</button>
+    <button class="type-tab" data-type="estorno" onclick="setTxType('estorno',this)">🔄 Estorno/Dev.</button>
   </div>
   <div class="sheet-body" id="tx-form" style="padding-top:16px"></div>
 </div>
@@ -858,8 +860,8 @@ function toast(msg,type=''){
   clearTimeout(el._t);el._t=setTimeout(()=>{el.className=''},3000);
 }
 const emptyState=(ic,t,d)=>`<div class="empty-state"><div class="empty-state-icon">${ic}</div><h3>${t}</h3><p>${d}</p></div>`;
-const tIcon=t=>({income:'💚',expense:'🔴',transfer:'🔵',invest:'🟣',adjust:'⚡'}[t]||'💰');
-const tColor=t=>({income:'income',expense:'expense',transfer:'transfer',invest:'invest',adjust:'adjust'}[t]||'income');
+const tIcon=t=>({income:'💚',expense:'🔴',transfer:'🔵',invest:'🟣',adjust:'⚡',estorno:'🔄'}[t]||'💰');
+const tColor=t=>({income:'income',expense:'expense',transfer:'transfer',invest:'invest',adjust:'adjust',estorno:'estorno'}[t]||'income');
 const accTypeLabel=t=>({checking:'Conta corrente',savings:'Poupança',cash:'Espécie',wallet:'Carteira',digital:'Digital',prepaid:'Pré-pago',investment:'Investimento',loan:'Empréstimo',financing:'Financiamento',reserve:'Reserva',other:'Outros'}[t]||t);
 const invTypeLabel=t=>({savings:'Poupança',cdb:'CDB',treasury:'Tesouro Direto',fund:'Fundo',stocks:'Ações',fii:'FII',pension:'Previdência',crypto:'Cripto',other:'Outros'}[t]||t);
 const statusLabel=s=>({paid:'Pago',received:'Recebido',pending:'Pendente',scheduled:'Agendado',overdue:'Atrasado',cancelled:'Cancelado',forecast:'Previsto'}[s]||s);
@@ -948,7 +950,7 @@ async function seedCats(){
 function txForMonth(m,y){return S.transactions.filter(t=>{const d=new Date(t.date_competence+'T12:00:00');return d.getMonth()+1===m&&d.getFullYear()===y})}
 function monthTotals(m,y){
   let inc=0,exp=0;
-  txForMonth(m,y).forEach(t=>{const p=t.status==='paid'||t.status==='received';if(t.type==='income'&&p)inc+=+t.amount;if(t.type==='expense'&&p)exp+=+t.amount});
+  txForMonth(m,y).forEach(t=>{const p=t.status==='paid'||t.status==='received';if(t.type==='income'&&p)inc+=+t.amount;if(t.type==='expense'&&p)exp+=+t.amount;if(t.type==='estorno'&&p)exp-=+t.amount;});
   return{inc,exp,result:inc-exp};
 }
 function pendingTotals(m,y){
@@ -966,6 +968,7 @@ function accBal(id){
     if(t.type==='transfer'){if(t.account_id===id)b-=+t.amount;if(t.destination_account_id===id)b+=+t.amount}
     if(t.type==='invest'&&t.account_id===id)b-=+t.amount;
     if(t.type==='adjust'&&t.account_id===id)b+=+t.amount;
+    if(t.type==='estorno'&&t.account_id===id)b+=+t.amount;
   });
   return b;
 }
@@ -986,11 +989,12 @@ function projectedBal(m,y){
 }
 function catTotals(m,y){
   const map={};
-  txForMonth(m,y).filter(t=>t.type==='expense'&&(t.status==='paid'||t.status==='received')).forEach(t=>{
+  txForMonth(m,y).filter(t=>(t.type==='expense'||t.type==='estorno')&&(t.status==='paid'||t.status==='received')).forEach(t=>{
     const c=S.categories.find(x=>x.id===t.category_id);const n=c?c.name:'Outros';const col=c?c.color:'#94a3b8';
-    if(!map[n])map[n]={v:0,col};map[n].v+=+t.amount;
+    if(!map[n])map[n]={v:0,col};
+    if(t.type==='expense')map[n].v+=+t.amount;else map[n].v-=+t.amount;
   });
-  return Object.entries(map).sort((a,b)=>b[1].v-a[1].v);
+  return Object.entries(map).filter(([,v])=>v.v>0.005).sort((a,b)=>b[1].v-a[1].v);
 }
 function last6Months(){const r=[];let m=S.month,y=S.year;for(let i=0;i<6;i++){r.unshift({m,y});m--;if(m===0){m=12;y--}}return r}
 
@@ -1278,7 +1282,7 @@ function buildTxForm(){
   const destOpts=S.accounts.map(a=>`<option value="${a.id}" ${t?.destination_account_id===a.id?'selected':''}>${a.name}</option>`).join('');
   const defAcc=type==='income'?S.settings.default_income_account_id:S.settings.default_expense_account_id;
   const accOptsD=S.accounts.map(a=>`<option value="${a.id}" ${(t?.account_id||defAcc)===a.id?'selected':''}>${a.name}</option>`).join('');
-  const cats=S.categories.filter(c=>c.type===(type==='income'?'income':type==='invest'?'investment':'expense')&&!c.parent_id);
+  const cats=S.categories.filter(c=>c.type===(type==='income'?'income':type==='invest'?'investment':'expense')&&!c.parent_id); // estorno usa categorias de despesa
   const catOpts='<option value="">Sem categoria</option>'+cats.map(c=>{ const subs=S.categories.filter(s=>s.parent_id===c.id);
     return`<option value="${c.id}" ${t?.category_id===c.id?'selected':''}>${c.icon||'📌'} ${c.name}</option>`+subs.map(s=>`<option value="${s.id}" ${t?.category_id===s.id?'selected':''}>&nbsp;&nbsp;└ ${s.name}</option>`).join('');}).join('');
   let html='';
@@ -1302,6 +1306,20 @@ function buildTxForm(){
       <div class="form-group"><label class="form-label">Conta *</label><select class="form-input form-select" id="tf-acc"><option value="">Selecione</option>${accOpts}</select></div>
     </div>
     <div class="form-group"><label class="form-label">Data</label><input class="form-input" id="tf-date" type="date" value="${t?.date_competence||td}"></div>
+    <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input form-textarea" id="tf-notes">${t?.notes||''}</textarea></div>`;
+  }else if(type==='estorno'){
+    html=`<div style="background:var(--estorno-bg);border:1px solid var(--estorno-bd);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--estorno);font-weight:700">🔄 Estorno/Devolução: devolve o valor à conta e reduz o gasto da categoria escolhida. Não entra como receita.</div>
+    <div class="form-group"><label class="form-label">Descrição *</label><input class="form-input" id="tf-desc" placeholder="Ex: Devolução roupa, Estorno supermercado" value="${t?.description||''}"></div>
+    <div class="form-group"><label class="form-label">Valor devolvido (R$) *</label><input class="form-input" id="tf-amount" type="number" step="0.01" min="0.01" placeholder="0,00" value="${t?.amount||''}"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Data *</label><input class="form-input" id="tf-date" type="date" value="${t?.date_competence||td}"></div>
+      <div class="form-group"><label class="form-label">Status</label><select class="form-input form-select" id="tf-status"><option value="received" ${!t||t?.status==='received'?'selected':''}>Recebido</option><option value="pending" ${t?.status==='pending'?'selected':''}>Pendente</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Conta *</label><select class="form-input form-select" id="tf-acc"><option value="">Selecione</option>${accOptsD}</select></div>
+      <div class="form-group"><label class="form-label">Categoria da compra original</label><select class="form-input form-select" id="tf-cat">${catOpts}</select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Tags <span style="font-weight:400;color:var(--text-3)">(separadas por vírgula)</span></label><input class="form-input" id="tf-tags" placeholder="ex: devolução, loja" value="${(t?.tags||[]).join(', ')}"></div>
     <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input form-textarea" id="tf-notes">${t?.notes||''}</textarea></div>`;
   }else{
     html=`<div class="form-group"><label class="form-label">Descrição *</label><input class="form-input" id="tf-desc" placeholder="${type==='income'?'Ex: Salário, Venda':'Ex: Supermercado, Aluguel'}" value="${t?.description||pf.desc||''}"></div>
@@ -1379,6 +1397,12 @@ async function saveTx(){
     }else if(type==='adjust'){
       const acc=document.getElementById('tf-acc')?.value;if(!acc)throw new Error('Selecione a conta');
       data={user_id:S.user.id,type:'adjust',description:desc||'Ajuste de saldo',amount,account_id:acc,date_competence:date,date_cash:date,status:'paid',notes:document.getElementById('tf-notes')?.value||null,include_in_reports:false,include_in_budget:false};
+    }else if(type==='estorno'){
+      if(!desc)throw new Error('Informe a descrição');const acc=document.getElementById('tf-acc')?.value;if(!acc)throw new Error('Selecione a conta');
+      const status=document.getElementById('tf-status')?.value||'received';
+      const rawTags=document.getElementById('tf-tags')?.value||'';
+      const tags=rawTags.split(',').map(t=>t.trim()).filter(Boolean);
+      data={user_id:S.user.id,type:'estorno',description:desc,amount:Math.abs(amount),account_id:acc,category_id:document.getElementById('tf-cat')?.value||null,date_competence:date,date_cash:date,paid_at:status==='received'?date:null,status,notes:document.getElementById('tf-notes')?.value||null,tags,include_in_reports:true,include_in_budget:false};
     }else{
       if(!desc)throw new Error('Informe a descrição');const acc=document.getElementById('tf-acc')?.value;if(!acc)throw new Error('Selecione a conta');
       const status=document.getElementById('tf-status')?.value||'pending';const paid=status==='paid'||status==='received';
