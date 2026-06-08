@@ -286,7 +286,7 @@ input,select,textarea{font-family:var(--font)}
     <div class="chart-card mt-12"><div class="chart-title">Receitas × Despesas (6 meses)</div><div class="chart-wrap"><canvas id="chart-rep-monthly"></canvas></div></div>
     <div class="chart-card"><div class="chart-title">Gastos por categoria</div><div class="chart-wrap"><canvas id="chart-rep-cat"></canvas></div></div>
     <div class="chart-card"><div class="chart-title">Fixo × Variável × Eventual</div><div class="chart-wrap"><canvas id="chart-rep-class"></canvas></div></div>
-    <div class="section-hdr"><h2>Maiores despesas (geral)</h2></div>
+    <div class="section-hdr"><h2>Maiores despesas do mês</h2></div>
     <div class="card" style="margin:0 16px 12px" id="rep-top-expenses"></div>
   </div>
 
@@ -692,6 +692,11 @@ input,select,textarea{font-family:var(--font)}
     <div class="form-row">
       <div class="form-group"><label class="form-label">Cor</label><input class="form-input" id="cat-color" type="color" value="#059669" style="height:44px;padding:4px 6px"></div>
       <div class="form-group"><label class="form-label">Ícone (emoji)</label><input class="form-input" id="cat-icon" placeholder="📌" maxlength="4"></div>
+    </div>
+    <div class="form-group" id="cat-fixed-wrap">
+      <label class="form-label">Valor fixo mensal (R$) <span style="font-weight:400;color:var(--text-3)">— opcional</span></label>
+      <input class="form-input" id="cat-monthly-fixed" type="number" step="0.01" min="0" placeholder="Ex: 400,00">
+      <div style="font-size:12px;color:var(--text-3);margin-top:4px">💡 Até este valor/mês = <b>Fixo</b>. Acima disso = <b>Variável</b>.</div>
     </div>
     <button class="btn btn-primary btn-full btn-lg" onclick="saveCategory()" id="btn-save-cat">Salvar categoria</button>
   </div>
@@ -1137,10 +1142,17 @@ function renderReports(){
   const cts=catTotals(S.month,S.year).slice(0,8);const cctx=document.getElementById('chart-rep-cat');if(S.charts.repC)S.charts.repC.destroy();
   if(cts.length)S.charts.repC=new Chart(cctx,{type:'doughnut',data:{labels:cts.map(c=>c[0]),datasets:[{data:cts.map(c=>c[1].v),backgroundColor:cts.map(c=>c[1].col),borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{family:'Nunito',size:11},padding:12,boxWidth:12}}}}});
   const txs=txForMonth(S.month,S.year).filter(t=>t.type==='expense'&&(t.status==='paid'||t.status==='received'));
-  const cls={fixed:0,variable:0,occasional:0};txs.forEach(t=>{const c=t.classification||'variable';cls[c]=(cls[c]||0)+(+t.amount)});
+  // Classificação usando monthly_fixed da categoria como threshold
+  const cls={fixed:0,variable:0,occasional:0};
+  const byCat={};txs.forEach(t=>{const k=t.category_id||'__';byCat[k]=(byCat[k]||0)+(+t.amount)});
+  Object.entries(byCat).forEach(([catId,total])=>{
+    const cat=S.categories.find(c=>c.id===catId);const mf=+(cat?.monthly_fixed||0);
+    if(mf>0){cls.fixed+=Math.min(total,mf);cls.variable+=Math.max(0,total-mf);}
+    else{txs.filter(t=>(t.category_id||'__')===catId).forEach(t=>{const c=t.classification||'variable';cls[c]=(cls[c]||0)+(+t.amount);});}
+  });
   const clctx=document.getElementById('chart-rep-class');if(S.charts.repCl)S.charts.repCl.destroy();
   S.charts.repCl=new Chart(clctx,{type:'doughnut',data:{labels:['Fixo','Variável','Eventual'],datasets:[{data:[cls.fixed,cls.variable,cls.occasional],backgroundColor:['#2563eb','#d97706','#dc2626'],borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{family:'Nunito',size:11},padding:12,boxWidth:12}}}}});
-  const top=S.transactions.filter(t=>t.type==='expense'&&(t.status==='paid'||t.status==='received')).sort((a,b)=>+b.amount-+a.amount).slice(0,5);
+  const top=[...txs].sort((a,b)=>+b.amount-+a.amount).slice(0,5);
   document.getElementById('rep-top-expenses').innerHTML=!top.length?emptyState('📊','Sem despesas pagas','Pague lançamentos para aparecer aqui'):`<div class="tx-list">${top.map(txRow).join('')}</div>`;
 }
 
@@ -1491,14 +1503,18 @@ function openCategoryModal(id){
   document.getElementById('cat-sheet-title').textContent=c?'Editar categoria':'Nova categoria';
   document.getElementById('cat-name').value=c?.name||'';document.getElementById('cat-type').value=c?.type||S.catFilter||'expense';
   document.getElementById('cat-color').value=c?.color||'#059669';document.getElementById('cat-icon').value=c?.icon||'📌';
+  document.getElementById('cat-monthly-fixed').value=c?.monthly_fixed||'';
   document.getElementById('cat-parent').innerHTML='<option value="">Nenhuma (principal)</option>'+S.categories.filter(x=>!x.parent_id&&x.id!==id).map(x=>`<option value="${x.id}" ${c?.parent_id===x.id?'selected':''}>${x.name}</option>`).join('');
+  const showFixed=()=>{document.getElementById('cat-fixed-wrap').style.display=document.getElementById('cat-type').value==='expense'?'block':'none'};
+  showFixed();document.getElementById('cat-type').onchange=showFixed;
   openSheet('cat-sheet');
 }
 async function saveCategory(){
   const name=document.getElementById('cat-name').value.trim();if(!name){toast('Informe o nome','error');return}
   const btn=document.getElementById('btn-save-cat');btn.disabled=true;btn.textContent='Salvando...';
   try{
-    const data={user_id:S.user.id,name,type:document.getElementById('cat-type').value,color:document.getElementById('cat-color').value,icon:document.getElementById('cat-icon').value||'📌',parent_id:document.getElementById('cat-parent').value||null};
+    const mf=parseFloat(document.getElementById('cat-monthly-fixed').value);
+    const data={user_id:S.user.id,name,type:document.getElementById('cat-type').value,color:document.getElementById('cat-color').value,icon:document.getElementById('cat-icon').value||'📌',parent_id:document.getElementById('cat-parent').value||null,monthly_fixed:(!isNaN(mf)&&mf>0)?mf:null};
     if(S.editCatId){await S.sb.from('categories').update(data).eq('id',S.editCatId);toast('Categoria atualizada!','success')}
     else{await S.sb.from('categories').insert(data);toast('Categoria criada!','success')}
     await loadCategories();closeSheet('cat-sheet');renderCategories();
