@@ -11,6 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -156,6 +157,10 @@ input,select,textarea{font-family:var(--font)}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 @media(min-width:480px){.summary-cards{grid-template-columns:repeat(4,1fr)}.menu-grid{grid-template-columns:repeat(4,1fr)}}
 @media(min-width:768px){#app{max-width:480px;margin:0 auto}#bottom-nav{max-width:480px;left:50%;transform:translateX(-50%)}#toast{max-width:480px}}
+/* Modo privacidade */
+.privacy-mode .privacy,.privacy-mode .tx-amount,.privacy-mode .balance-value,.privacy-mode .acc-bal-val{filter:blur(9px);user-select:none;transition:filter .2s}
+#btn-privacy{background:transparent;border:none;color:rgba(255,255,255,.75);font-size:18px;cursor:pointer;padding:2px 4px;line-height:1;vertical-align:middle;transition:opacity .2s}
+#btn-privacy:hover{opacity:1;color:#fff}
 </style>
 </head>
 <body>
@@ -223,9 +228,12 @@ input,select,textarea{font-family:var(--font)}
   <!-- DASHBOARD -->
   <div class="screen active" id="screen-dashboard">
     <div class="balance-header">
-      <div class="balance-label">Patrimônio total</div>
-      <div class="balance-value" id="dash-patrimony">R$ 0,00</div>
-      <div style="font-size:12px;opacity:.75;margin-top:2px">Projetado mês: <span id="dash-projected" style="font-weight:800">R$ 0,00</span></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div class="balance-label">Patrimônio total</div>
+        <button id="btn-privacy" onclick="togglePrivacy()" title="Ocultar valores">👁</button>
+      </div>
+      <div class="balance-value privacy" id="dash-patrimony">R$ 0,00</div>
+      <div style="font-size:12px;opacity:.75;margin-top:2px">Projetado mês: <span class="privacy" id="dash-projected" style="font-weight:800">R$ 0,00</span></div>
       <div class="balance-pills">
         <div class="balance-pill">↑ <span id="dash-income-pill">R$ 0,00</span></div>
         <div class="balance-pill">↓ <span id="dash-expense-pill">R$ 0,00</span></div>
@@ -669,6 +677,28 @@ input,select,textarea{font-family:var(--font)}
       <div class="form-group"><label class="form-label">Ícone (emoji)</label><input class="form-input" id="acc-icon" placeholder="🏦" maxlength="4"></div>
     </div>
     <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input form-textarea" id="acc-notes" placeholder="Opcional"></textarea></div>
+    <!-- Rendimento (só para poupança/investimento/reserva) -->
+    <div id="acc-yield-wrap" style="display:none">
+      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin:12px 0 8px;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:6px">📈 Rendimento esperado</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Taxa de juros</label>
+          <input class="form-input" id="acc-rate" type="number" step="0.001" min="0" placeholder="Ex: 10.5">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Período</label>
+          <select class="form-input form-select" id="acc-rate-type">
+            <option value="annual">% ao ano</option>
+            <option value="monthly">% ao mês</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Alíquota IR (%)</label>
+        <input class="form-input" id="acc-ir" type="number" step="0.1" min="0" max="100" placeholder="Ex: 15 — deixe vazio se isento">
+      </div>
+      <div style="font-size:12px;color:var(--text-3);margin-top:-6px">💡 Preencha a taxa e o app calculará o rendimento esperado vs o que você lançar como receita.</div>
+    </div>
     <button class="btn btn-primary btn-full btn-lg" onclick="saveAccount()" id="btn-save-acc">Salvar conta</button>
     <div id="acc-archive-wrap" style="display:none;margin-top:8px"><button class="btn btn-secondary btn-full" onclick="archiveAccount()">Arquivar conta</button></div>
   </div>
@@ -936,6 +966,10 @@ async function initApp(){
   document.getElementById('app').style.display='block';
   setTimeout(()=>checkBillNotifications(),3000); // checa 3s após login
   await loadAll();navigate('dashboard');
+  // Restaurar modo privacidade da sessão anterior
+  S.privacy=localStorage.getItem('mf-privacy')==='1';
+  document.body.classList.toggle('privacy-mode',S.privacy);
+  const bp=document.getElementById('btn-privacy');if(bp)bp.textContent=S.privacy?'🙈':'👁';
 }
 async function loadAll(){await Promise.all([loadAccounts(),loadCategories(),loadTransactions(),loadCards(),loadInvestments(),loadBudgets(),loadSettings(),loadGoals()])}
 async function loadAccounts(){const{data}=await S.sb.from('accounts').select('*').eq('user_id',S.user.id).eq('status','active').order('sort_order');S.accounts=data||[]}
@@ -1049,7 +1083,7 @@ function renderDash(){
     :S.accounts.slice(0,5).map(a=>`<div class="account-card" onclick="navigate('accounts')">
       <div class="account-icon" style="background:${a.color}22">${a.icon||'🏦'}</div>
       <div style="flex:1"><div style="font-size:14px;font-weight:700">${a.name}</div><div style="font-size:12px;color:var(--text-3)">${accTypeLabel(a.type)}</div></div>
-      <div style="font-size:16px;font-weight:800;color:${accBal(a.id)<0?'var(--expense)':'var(--text)'}">${fmt(accBal(a.id))}</div>
+      <div class="privacy" style="font-size:16px;font-weight:800;color:${accBal(a.id)<0?'var(--expense)':'var(--text)'}">${fmt(accBal(a.id))}</div>
     </div>`).join('');
   const txs=txForMonth(S.month,S.year).slice(0,8);
   document.getElementById('dash-tx-list').innerHTML=!txs.length?emptyState('💸','Sem lançamentos','Toque em + para adicionar')
@@ -1138,9 +1172,10 @@ function renderReports(){
   document.getElementById('rep-summary').innerHTML=`<div class="s-card"><div class="s-card-label">Receitas</div><div class="s-card-value" style="color:var(--income)">${fmt(inc)}</div></div><div class="s-card"><div class="s-card-label">Despesas</div><div class="s-card-value" style="color:var(--expense)">${fmt(exp)}</div></div><div class="s-card"><div class="s-card-label">Resultado</div><div class="s-card-value" style="color:${result>=0?'var(--income)':'var(--expense)'}">${fmt(result)}</div></div><div class="s-card"><div class="s-card-label">Patrimônio</div><div class="s-card-value" style="font-size:15px">${fmt(patrimony())}</div></div>`;
   const months=last6Months();
   const mctx=document.getElementById('chart-rep-monthly');if(S.charts.repM)S.charts.repM.destroy();
-  S.charts.repM=new Chart(mctx,{type:'bar',data:{labels:months.map(({m,y})=>mShort(m,y)),datasets:[{label:'Receitas',data:months.map(({m,y})=>monthTotals(m,y).inc),backgroundColor:'#059669',borderRadius:5},{label:'Despesas',data:months.map(({m,y})=>monthTotals(m,y).exp),backgroundColor:'#dc2626',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{font:{family:'Nunito',size:11},padding:14}}},scales:{x:{grid:{display:false},ticks:{font:{family:'Nunito',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Nunito',size:11},callback:v=>'R$'+v.toLocaleString('pt-BR')}}}}});
+  S.charts.repM=new Chart(mctx,{type:'bar',data:{labels:months.map(({m,y})=>mShort(m,y)),datasets:[{label:'Receitas',data:months.map(({m,y})=>monthTotals(m,y).inc),backgroundColor:'#059669',borderRadius:5},{label:'Despesas',data:months.map(({m,y})=>monthTotals(m,y).exp),backgroundColor:'#dc2626',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{font:{family:'Nunito',size:11},padding:14}},datalabels:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{family:'Nunito',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Nunito',size:11},callback:v=>'R$'+v.toLocaleString('pt-BR')}}}}});
   const cts=catTotals(S.month,S.year).slice(0,8);const cctx=document.getElementById('chart-rep-cat');if(S.charts.repC)S.charts.repC.destroy();
-  if(cts.length)S.charts.repC=new Chart(cctx,{type:'doughnut',data:{labels:cts.map(c=>c[0]),datasets:[{data:cts.map(c=>c[1].v),backgroundColor:cts.map(c=>c[1].col),borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{family:'Nunito',size:11},padding:12,boxWidth:12}}}}});
+  const dlConfig={display:ctx=>{const d=ctx.chart.data.datasets[0].data;const total=d.reduce((a,b)=>a+b,0);return total>0&&ctx.dataset.data[ctx.dataIndex]/total>0.04},formatter:(v,ctx)=>{const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);return t?((v/t)*100).toFixed(1)+'%':'';},color:'#fff',font:{weight:'700',size:11,family:'Nunito'},textShadowBlur:4,textShadowColor:'rgba(0,0,0,.4)'};
+  if(cts.length)S.charts.repC=new Chart(cctx,{type:'doughnut',data:{labels:cts.map(c=>c[0]),datasets:[{data:cts.map(c=>c[1].v),backgroundColor:cts.map(c=>c[1].col),borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{family:'Nunito',size:11},padding:12,boxWidth:12}},datalabels:dlConfig}}});
   const txs=txForMonth(S.month,S.year).filter(t=>t.type==='expense'&&(t.status==='paid'||t.status==='received'));
   // Classificação usando monthly_fixed da categoria como threshold
   const cls={fixed:0,variable:0,occasional:0};
@@ -1151,7 +1186,7 @@ function renderReports(){
     else{txs.filter(t=>(t.category_id||'__')===catId).forEach(t=>{const c=t.classification||'variable';cls[c]=(cls[c]||0)+(+t.amount);});}
   });
   const clctx=document.getElementById('chart-rep-class');if(S.charts.repCl)S.charts.repCl.destroy();
-  S.charts.repCl=new Chart(clctx,{type:'doughnut',data:{labels:['Fixo','Variável','Eventual'],datasets:[{data:[cls.fixed,cls.variable,cls.occasional],backgroundColor:['#2563eb','#d97706','#dc2626'],borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{family:'Nunito',size:11},padding:12,boxWidth:12}}}}});
+  S.charts.repCl=new Chart(clctx,{type:'doughnut',data:{labels:['Fixo','Variável','Eventual'],datasets:[{data:[cls.fixed,cls.variable,cls.occasional],backgroundColor:['#2563eb','#d97706','#dc2626'],borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{family:'Nunito',size:11},padding:12,boxWidth:12}},datalabels:dlConfig}}});
   const top=[...txs].sort((a,b)=>+b.amount-+a.amount).slice(0,5);
   document.getElementById('rep-top-expenses').innerHTML=!top.length?emptyState('📊','Sem despesas pagas','Pague lançamentos para aparecer aqui'):`<div class="tx-list">${top.map(txRow).join('')}</div>`;
 }
@@ -1161,11 +1196,22 @@ function renderAccounts(){
   document.getElementById('acc-total').textContent=fmt(totalBal());
   const el=document.getElementById('accounts-list');
   if(!S.accounts.length){el.innerHTML=emptyState('🏦','Nenhuma conta','Crie sua primeira conta')+'<div style="padding:0 16px 16px"><button class="btn btn-primary btn-full" onclick="openAccountModal()">+ Criar primeira conta</button></div>';return}
-  el.innerHTML=S.accounts.map(a=>`<div class="account-card" onclick="openAccountModal('${a.id}')">
+  el.innerHTML=S.accounts.map(a=>{
+    const bal=accBal(a.id);
+    // Rendimento esperado (contas com taxa configurada)
+    let yieldInfo='';
+    if(a.interest_rate&&(a.type==='savings'||a.type==='investment'||a.type==='reserve')){
+      const rate=+a.interest_rate;const irRate=+(a.ir_rate||0);
+      let monthlyGross=a.interest_type==='monthly'?rate/100:Math.pow(1+rate/100,1/12)-1;
+      const monthlyNet=monthlyGross*bal*(1-irRate/100);
+      const realIncome=S.transactions.filter(t=>t.account_id===a.id&&t.type==='income'&&t.status==='received'&&t.date_competence?.startsWith(`${S.year}-${String(S.month).padStart(2,'0')}`)).reduce((s,t)=>s+(+t.amount),0);
+      yieldInfo=`<div style="font-size:11px;margin-top:3px"><span style="color:var(--text-3)">Esp.</span> <span class="privacy" style="color:var(--income);font-weight:700">${fmt(monthlyNet)}</span><span style="color:var(--text-3)"> · Real </span><span class="privacy" style="color:${realIncome>=monthlyNet?'var(--income)':'var(--expense)'};font-weight:700">${fmt(realIncome)}</span></div>`;
+    }
+    return`<div class="account-card" onclick="openAccountModal('${a.id}')">
     <div class="account-icon" style="background:${a.color}22">${a.icon||'🏦'}</div>
-    <div style="flex:1"><div style="font-size:14px;font-weight:700">${a.name}</div><div style="font-size:12px;color:var(--text-3)">${accTypeLabel(a.type)}</div></div>
-    <div style="text-align:right"><div style="font-size:16px;font-weight:800;color:${accBal(a.id)<0?'var(--expense)':'var(--text)'}">${fmt(accBal(a.id))}</div><div style="font-size:11px;color:var(--text-3)">inicial: ${fmt(a.initial_balance)}</div></div>
-  </div>`).join('');
+    <div style="flex:1"><div style="font-size:14px;font-weight:700">${a.name}</div><div style="font-size:12px;color:var(--text-3)">${accTypeLabel(a.type)}</div>${yieldInfo}</div>
+    <div style="text-align:right"><div class="acc-bal-val" style="font-size:16px;font-weight:800;color:${bal<0?'var(--expense)':'var(--text)'}">${fmt(bal)}</div><div style="font-size:11px;color:var(--text-3)">inicial: ${fmt(a.initial_balance)}</div></div>
+  </div>`;}).join('');
 }
 
 // CATEGORIES
@@ -1263,6 +1309,13 @@ async function markPaid(id,type){
   await loadTransactions();renderBills();toast(type==='income'?'Recebido! ✓':'Pago! ✓','success');
 }
 function renderMenu(){document.getElementById('menu-user-info').textContent=S.user?.email||''}
+function togglePrivacy(){
+  S.privacy=!S.privacy;
+  document.body.classList.toggle('privacy-mode',S.privacy);
+  const btn=document.getElementById('btn-privacy');
+  if(btn)btn.textContent=S.privacy?'🙈':'👁';
+  localStorage.setItem('mf-privacy',S.privacy?'1':'0');
+}
 
 // SETTINGS
 function renderSettings(){
@@ -1480,13 +1533,21 @@ function openAccountModal(id){
   document.getElementById('acc-name').value=a?.name||'';document.getElementById('acc-type').value=a?.type||'checking';
   document.getElementById('acc-initial').value=a?.initial_balance||'';document.getElementById('acc-date').value=a?'':today();
   document.getElementById('acc-color').value=a?.color||'#059669';document.getElementById('acc-icon').value=a?.icon||'🏦';document.getElementById('acc-notes').value=a?.notes||'';
+  // Campos de rendimento
+  document.getElementById('acc-rate').value=a?.interest_rate||'';
+  document.getElementById('acc-rate-type').value=a?.interest_type||'annual';
+  document.getElementById('acc-ir').value=a?.ir_rate||'';
+  const YIELD_TYPES=['savings','investment','reserve'];
+  const showYield=()=>{document.getElementById('acc-yield-wrap').style.display=YIELD_TYPES.includes(document.getElementById('acc-type').value)?'block':'none'};
+  showYield();document.getElementById('acc-type').onchange=showYield;
   document.getElementById('acc-archive-wrap').style.display=a?'block':'none';openSheet('account-sheet');
 }
 async function saveAccount(){
   const name=document.getElementById('acc-name').value.trim();if(!name){toast('Informe o nome','error');return}
   const btn=document.getElementById('btn-save-acc');btn.disabled=true;btn.textContent='Salvando...';
   try{
-    const data={user_id:S.user.id,name,type:document.getElementById('acc-type').value,initial_balance:parseFloat(document.getElementById('acc-initial').value)||0,color:document.getElementById('acc-color').value,icon:document.getElementById('acc-icon').value||'🏦',notes:document.getElementById('acc-notes').value||null};
+    const ir=parseFloat(document.getElementById('acc-ir').value);const rate=parseFloat(document.getElementById('acc-rate').value);
+    const data={user_id:S.user.id,name,type:document.getElementById('acc-type').value,initial_balance:parseFloat(document.getElementById('acc-initial').value)||0,color:document.getElementById('acc-color').value,icon:document.getElementById('acc-icon').value||'🏦',notes:document.getElementById('acc-notes').value||null,interest_rate:!isNaN(rate)&&rate>0?rate:null,interest_type:document.getElementById('acc-rate-type').value||'annual',ir_rate:!isNaN(ir)&&ir>0?ir:null};
     if(S.editAccId){const{error}=await S.sb.from('accounts').update(data).eq('id',S.editAccId);if(error)throw error;toast('Conta atualizada!','success')}
     else{const{error}=await S.sb.from('accounts').insert(data);if(error)throw error;toast('Conta criada!','success')}
     await loadAccounts();closeSheet('account-sheet');renderAccounts();
