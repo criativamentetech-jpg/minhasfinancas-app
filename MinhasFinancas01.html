@@ -293,6 +293,7 @@ input,select,textarea{font-family:var(--font)}
     <div style="padding:12px 16px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px" id="rep-summary"></div>
     <div class="chart-card mt-12"><div class="chart-title">Receitas × Despesas (6 meses)</div><div class="chart-wrap"><canvas id="chart-rep-monthly"></canvas></div></div>
     <div class="chart-card"><div class="chart-title">Gastos por categoria</div><div class="chart-wrap" style="height:180px"><canvas id="chart-rep-cat"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Evolução por categoria (12 meses)</div><div style="font-size:11px;color:var(--text-3);margin:-8px 0 10px">Top 5 categorias do período</div><div class="chart-wrap" style="height:220px"><canvas id="chart-rep-catevol"></canvas></div></div>
     <div class="chart-card"><div class="chart-title">Fixo × Variável × Eventual</div><div class="chart-wrap" style="height:150px"><canvas id="chart-rep-class"></canvas></div></div>
     <div class="section-hdr"><h2>Maiores despesas do mês</h2></div>
     <div class="card" style="margin:0 16px 12px" id="rep-top-expenses"></div>
@@ -1046,6 +1047,7 @@ function catTotals(m,y){
   return Object.entries(map).filter(([,v])=>v.v>0.005).sort((a,b)=>b[1].v-a[1].v);
 }
 function last6Months(){const r=[];let m=S.month,y=S.year;for(let i=0;i<6;i++){r.unshift({m,y});m--;if(m===0){m=12;y--}}return r}
+function lastNMonths(n){const r=[];let m=S.month,y=S.year;for(let i=0;i<n;i++){r.unshift({m,y});m--;if(m===0){m=12;y--}}return r}
 
 // NAVIGATION
 const BACK={accounts:'menu',categories:'menu',cards:'menu',investments:'menu',budget:'menu',bills:'menu',import:'menu',backup:'menu',settings:'menu',goals:'menu',calculator:'menu'};
@@ -1185,6 +1187,33 @@ function renderReports(){
     });
   },font:{family:'Nunito',size:11},padding:8,boxWidth:10});
   if(cts.length)S.charts.repC=new Chart(cctx,{type:'doughnut',data:{labels:cts.map(c=>c[0]),datasets:[{data:cts.map(c=>c[1].v),backgroundColor:cts.map(c=>c[1].col),borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:richLegend()},datalabels:{display:false}}}});
+  // --- Evolução por categoria (12 meses) ---
+  const evolCtx=document.getElementById('chart-rep-catevol');if(S.charts.repEvol)S.charts.repEvol.destroy();
+  {
+    const mo12=lastNMonths(12);
+    // Pré-calcular catTotals uma vez por mês (performance)
+    const monthly={};mo12.forEach(({m,y})=>{monthly[`${y}-${m}`]=catTotals(m,y);});
+    // Top 5 categorias por total no período
+    const sums={};Object.values(monthly).forEach(cats=>cats.forEach(([n,d])=>{sums[n]=(sums[n]||0)+d.v;}));
+    const top5=Object.entries(sums).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n])=>n);
+    if(top5.length){
+      S.charts.repEvol=new Chart(evolCtx,{type:'line',
+        data:{
+          labels:mo12.map(({m,y})=>mShort(m,y)),
+          datasets:top5.map(name=>{
+            const cat=S.categories.find(c=>c.name===name);const col=cat?.color||'#94a3b8';
+            return{label:name,data:mo12.map(({m,y})=>{const ct=monthly[`${y}-${m}`].find(([n])=>n===name);return ct?+(ct[1].v.toFixed(2)):0;}),
+              borderColor:col,backgroundColor:col+'28',tension:.3,fill:false,pointRadius:3,pointHoverRadius:6,borderWidth:2};
+          })
+        },
+        options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+          plugins:{legend:{position:'bottom',labels:{font:{family:'Nunito',size:10},padding:8,boxWidth:10}},datalabels:{display:false},
+            tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: R$${(+ctx.parsed.y).toLocaleString('pt-BR',{minimumFractionDigits:2})}`}}},
+          scales:{x:{grid:{display:false},ticks:{font:{family:'Nunito',size:10}}},
+            y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Nunito',size:10},callback:v=>'R$'+v.toLocaleString('pt-BR')},beginAtZero:true}}}
+      });
+    }
+  }
   const txs=txForMonth(S.month,S.year).filter(t=>t.type==='expense'&&(t.status==='paid'||t.status==='received'));
   // Classificação usando monthly_fixed da categoria como threshold
   const cls={fixed:0,variable:0,occasional:0};
