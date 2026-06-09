@@ -1696,7 +1696,7 @@ function setQType(type){
   // Atualizar categorias
   const cats=S.categories.filter(c=>c.type===(isExp?'expense':'income')&&!c.parent_id);
   const catEl=document.getElementById('qt-cat');
-  if(catEl)catEl.innerHTML=`<option value="">Sem categoria</option>`+cats.map(c=>`<option value="${c.id}">${c.icon||'📌'} ${c.name}</option>`).join('');
+  if(catEl)catEl.innerHTML=`<option value="">Sem categoria</option>`+cats.map(c=>{const subs=S.categories.filter(s=>s.parent_id===c.id);return`<option value="${c.id}">${c.icon||'📌'} ${c.name}</option>`+subs.map(s=>`<option value="${s.id}">&nbsp;&nbsp;└ ${s.name}</option>`).join('');}).join('');
   // Atualizar conta padrão
   const defAcc=isExp?S.settings.default_expense_account_id:S.settings.default_income_account_id;
   const accEl=document.getElementById('qt-acc');
