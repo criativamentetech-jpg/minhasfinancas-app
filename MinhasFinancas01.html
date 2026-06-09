@@ -292,8 +292,8 @@ input,select,textarea{font-family:var(--font)}
     </div>
     <div style="padding:12px 16px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px" id="rep-summary"></div>
     <div class="chart-card mt-12"><div class="chart-title">Receitas × Despesas (6 meses)</div><div class="chart-wrap"><canvas id="chart-rep-monthly"></canvas></div></div>
-    <div class="chart-card"><div class="chart-title">Gastos por categoria</div><div class="chart-wrap"><canvas id="chart-rep-cat"></canvas></div></div>
-    <div class="chart-card"><div class="chart-title">Fixo × Variável × Eventual</div><div class="chart-wrap"><canvas id="chart-rep-class"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Gastos por categoria</div><div class="chart-wrap" style="height:180px"><canvas id="chart-rep-cat"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Fixo × Variável × Eventual</div><div class="chart-wrap" style="height:150px"><canvas id="chart-rep-class"></canvas></div></div>
     <div class="section-hdr"><h2>Maiores despesas do mês</h2></div>
     <div class="card" style="margin:0 16px 12px" id="rep-top-expenses"></div>
   </div>
@@ -1174,8 +1174,17 @@ function renderReports(){
   const mctx=document.getElementById('chart-rep-monthly');if(S.charts.repM)S.charts.repM.destroy();
   S.charts.repM=new Chart(mctx,{type:'bar',data:{labels:months.map(({m,y})=>mShort(m,y)),datasets:[{label:'Receitas',data:months.map(({m,y})=>monthTotals(m,y).inc),backgroundColor:'#059669',borderRadius:5},{label:'Despesas',data:months.map(({m,y})=>monthTotals(m,y).exp),backgroundColor:'#dc2626',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{font:{family:'Nunito',size:11},padding:14}},datalabels:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{family:'Nunito',size:11}}},y:{grid:{color:'#f1f5f9'},ticks:{font:{family:'Nunito',size:11},callback:v=>'R$'+v.toLocaleString('pt-BR')}}}}});
   const cts=catTotals(S.month,S.year).slice(0,8);const cctx=document.getElementById('chart-rep-cat');if(S.charts.repC)S.charts.repC.destroy();
-  const dlConfig={display:ctx=>{const d=ctx.chart.data.datasets[0].data;const total=d.reduce((a,b)=>a+b,0);return total>0&&ctx.dataset.data[ctx.dataIndex]/total>0.04},formatter:(v,ctx)=>{const t=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);return t?((v/t)*100).toFixed(1)+'%':'';},color:'#fff',font:{weight:'700',size:11,family:'Nunito'},textShadowBlur:4,textShadowColor:'rgba(0,0,0,.4)'};
-  if(cts.length)S.charts.repC=new Chart(cctx,{type:'doughnut',data:{labels:cts.map(c=>c[0]),datasets:[{data:cts.map(c=>c[1].v),backgroundColor:cts.map(c=>c[1].col),borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{family:'Nunito',size:11},padding:12,boxWidth:12}},datalabels:dlConfig}}});
+  // Legenda com valor + percentagem
+  const richLegend=()=>({generateLabels:function(chart){
+    const d=chart.data;const tot=d.datasets[0].data.reduce((a,b)=>a+(+b),0);
+    return d.labels.map((lbl,i)=>{
+      const v=+(d.datasets[0].data[i]||0);
+      const pct=tot>0?((v/tot)*100).toFixed(1):'0.0';
+      const fv='R$'+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      return{text:`${lbl}  ${fv}  ${pct}%`,fillStyle:d.datasets[0].backgroundColor[i],strokeStyle:d.datasets[0].backgroundColor[i],lineWidth:0,hidden:false,index:i};
+    });
+  },font:{family:'Nunito',size:11},padding:8,boxWidth:10});
+  if(cts.length)S.charts.repC=new Chart(cctx,{type:'doughnut',data:{labels:cts.map(c=>c[0]),datasets:[{data:cts.map(c=>c[1].v),backgroundColor:cts.map(c=>c[1].col),borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:richLegend()},datalabels:{display:false}}}});
   const txs=txForMonth(S.month,S.year).filter(t=>t.type==='expense'&&(t.status==='paid'||t.status==='received'));
   // Classificação usando monthly_fixed da categoria como threshold
   const cls={fixed:0,variable:0,occasional:0};
@@ -1186,7 +1195,7 @@ function renderReports(){
     else{txs.filter(t=>(t.category_id||'__')===catId).forEach(t=>{const c=t.classification||'variable';cls[c]=(cls[c]||0)+(+t.amount);});}
   });
   const clctx=document.getElementById('chart-rep-class');if(S.charts.repCl)S.charts.repCl.destroy();
-  S.charts.repCl=new Chart(clctx,{type:'doughnut',data:{labels:['Fixo','Variável','Eventual'],datasets:[{data:[cls.fixed,cls.variable,cls.occasional],backgroundColor:['#2563eb','#d97706','#dc2626'],borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{family:'Nunito',size:11},padding:12,boxWidth:12}},datalabels:dlConfig}}});
+  S.charts.repCl=new Chart(clctx,{type:'doughnut',data:{labels:['Fixo','Variável','Eventual'],datasets:[{data:[cls.fixed,cls.variable,cls.occasional],backgroundColor:['#2563eb','#d97706','#dc2626'],borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:richLegend()},datalabels:{display:false}}}});
   const top=[...txs].sort((a,b)=>+b.amount-+a.amount).slice(0,5);
   document.getElementById('rep-top-expenses').innerHTML=!top.length?emptyState('📊','Sem despesas pagas','Pague lançamentos para aparecer aqui'):`<div class="tx-list">${top.map(txRow).join('')}</div>`;
 }
