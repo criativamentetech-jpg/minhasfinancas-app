@@ -215,6 +215,13 @@ input,select,textarea{font-family:var(--font)}
   </div>
 </div>
 
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+  <div style="font-size:44px">💸</div>
+  <div style="font-size:15px;font-weight:700;color:var(--text-2)">Carregando seus dados...</div>
+  <div class="loader"></div>
+</div>
+
 <!-- MAIN APP -->
 <div id="app" style="display:none">
   <div class="top-header" id="top-header" style="display:none">
@@ -242,10 +249,10 @@ input,select,textarea{font-family:var(--font)}
     </div>
     <div class="month-nav"><button class="month-btn" onclick="changeMonth(-1)">‹</button><div class="month-label" id="dash-month-label"></div><button class="month-btn" onclick="changeMonth(1)">›</button></div>
     <div class="summary-cards">
-      <div class="s-card"><div class="s-card-label">Receitas</div><div class="s-card-value" style="color:var(--income)" id="dash-income">R$ 0,00</div></div>
-      <div class="s-card"><div class="s-card-label">Despesas</div><div class="s-card-value" style="color:var(--expense)" id="dash-expense">R$ 0,00</div></div>
-      <div class="s-card"><div class="s-card-label">A pagar</div><div class="s-card-value" style="color:var(--adjust)" id="dash-to-pay">R$ 0,00</div></div>
-      <div class="s-card"><div class="s-card-label">A receber</div><div class="s-card-value" style="color:var(--transfer)" id="dash-to-receive">R$ 0,00</div></div>
+      <div class="s-card" onclick="goToHistFilter('income')" style="cursor:pointer"><div class="s-card-label">Receitas</div><div class="s-card-value privacy" style="color:var(--income)" id="dash-income">R$ 0,00</div></div>
+      <div class="s-card" onclick="goToHistFilter('expense')" style="cursor:pointer"><div class="s-card-label">Despesas</div><div class="s-card-value privacy" style="color:var(--expense)" id="dash-expense">R$ 0,00</div></div>
+      <div class="s-card" onclick="goToBills('pay')" style="cursor:pointer"><div class="s-card-label">A pagar</div><div class="s-card-value privacy" style="color:var(--adjust)" id="dash-to-pay">R$ 0,00</div></div>
+      <div class="s-card" onclick="goToBills('receive')" style="cursor:pointer"><div class="s-card-label">A receber</div><div class="s-card-value privacy" style="color:var(--transfer)" id="dash-to-receive">R$ 0,00</div></div>
     </div>
     <div class="section-hdr"><h2>Contas</h2><a onclick="navigate('accounts')">Ver todas</a></div>
     <div class="card" style="margin:0 16px 12px" id="dash-accounts-list"></div>
@@ -256,6 +263,11 @@ input,select,textarea{font-family:var(--font)}
     </div>
     <div class="chart-card"><div class="chart-title">Receitas × Despesas (6 meses)</div><div class="chart-wrap"><canvas id="chart-dashboard"></canvas></div></div>
     <div class="chart-card"><div class="chart-title">Top categorias do mês</div><div class="chart-wrap" id="chart-cat-wrap"><canvas id="chart-categories"></canvas></div></div>
+    <!-- LIMITES DO MÊS -->
+    <div id="dash-budget-wrap" style="display:none">
+      <div class="section-hdr"><h2>🎯 Limites do mês</h2><a onclick="navigate('budget')">Ver todos</a></div>
+      <div class="card" style="margin:0 16px 12px;padding:0;overflow:hidden" id="dash-budget-list"></div>
+    </div>
     <div class="section-hdr"><h2>Últimos lançamentos</h2><a onclick="navigate('history')">Ver todos</a></div>
     <div class="card" style="margin:0 16px 16px" id="dash-tx-list"></div>
   </div>
@@ -965,8 +977,11 @@ async function doSignOut(){
 async function initApp(){
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='block';
+  document.getElementById('loading-overlay').style.display='flex';
   setTimeout(()=>checkBillNotifications(),3000); // checa 3s após login
-  await loadAll();navigate('dashboard');
+  await loadAll();
+  document.getElementById('loading-overlay').style.display='none';
+  navigate('dashboard');
   // Restaurar modo privacidade da sessão anterior
   S.privacy=localStorage.getItem('mf-privacy')==='1';
   document.body.classList.toggle('privacy-mode',S.privacy);
@@ -1066,6 +1081,20 @@ function navigate(s){
   if(el)el.scrollTo(0,0);
 }
 function goBack(){navigate(BACK[S.screen]||'menu')}
+function goToHistFilter(f){
+  S.histFilter=f;navigate('history');
+  document.querySelectorAll('#hist-type-bar .filter-chip').forEach(b=>b.classList.remove('active'));
+  const chips=document.querySelectorAll('#hist-type-bar .filter-chip');
+  const map={all:0,income:1,expense:2,transfer:3,invest:4};
+  if(map[f]!==undefined&&chips[map[f]])chips[map[f]].classList.add('active');
+}
+function goToBills(f){
+  S.billsFilter=f;navigate('bills');
+  document.querySelectorAll('#screen-bills .filter-chip').forEach(b=>b.classList.remove('active'));
+  const chips=document.querySelectorAll('#screen-bills .filter-chip');
+  const map={pay:0,receive:1,overdue:2};
+  if(map[f]!==undefined&&chips[map[f]])chips[map[f]].classList.add('active');
+}
 function changeMonth(d){S.month+=d;if(S.month>12){S.month=1;S.year++}if(S.month<1){S.month=12;S.year--}navigate(S.screen)}
 
 // DASHBOARD
@@ -1091,7 +1120,47 @@ function renderDash(){
   document.getElementById('dash-tx-list').innerHTML=!txs.length?emptyState('💸','Sem lançamentos','Toque em + para adicionar')
     :`<div class="tx-list">${txs.map(txRow).join('')}</div>`;
   renderUpcoming();
-  renderDashChart();renderCatChart();
+  renderDashChart();renderCatChart();renderDashBudget();
+}
+function renderDashBudget(){
+  const wrap=document.getElementById('dash-budget-wrap');
+  const el=document.getElementById('dash-budget-list');
+  // Categorias com monthly_fixed > 0
+  const fixedCats=S.categories.filter(c=>c.monthly_fixed>0&&c.type==='expense');
+  // Orçamentos explícitos do mês
+  const mb=S.budgets.filter(b=>b.month===S.month&&b.year===S.year);
+  // Merge: orçamento explícito tem prioridade sobre monthly_fixed
+  const entries=[];
+  const seen=new Set();
+  mb.forEach(b=>{
+    const c=S.categories.find(x=>x.id===b.category_id);if(!c)return;
+    seen.add(b.category_id);
+    const spent=txForMonth(S.month,S.year).filter(t=>t.category_id===b.category_id&&t.type==='expense'&&(t.status==='paid'||t.status==='received')).reduce((s,t)=>s+(+t.amount),0);
+    const limit=+b.planned_amount;const pct=limit>0?(spent/limit*100):0;
+    entries.push({c,spent,limit,pct,tag:'📊'});
+  });
+  fixedCats.forEach(c=>{
+    if(seen.has(c.id))return;
+    const spent=txForMonth(S.month,S.year).filter(t=>t.category_id===c.id&&t.type==='expense'&&(t.status==='paid'||t.status==='received')).reduce((s,t)=>s+(+t.amount),0);
+    const limit=+c.monthly_fixed;const pct=limit>0?(spent/limit*100):0;
+    entries.push({c,spent,limit,pct,tag:'🔒'});
+  });
+  if(!entries.length){wrap.style.display='none';return}
+  // Mostrar top 4 por % usada (mais crítico primeiro)
+  entries.sort((a,b)=>b.pct-a.pct);
+  const top=entries.slice(0,4);
+  wrap.style.display='block';
+  el.innerHTML=top.map((e,i)=>{
+    const over=e.pct>=100;const warn=e.pct>=80&&!over;
+    const border=i<top.length-1?'border-bottom:1px solid var(--border);':'';
+    return`<div style="padding:10px 14px;${border}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-size:12px;font-weight:700">${e.c.icon||'📌'} ${e.c.name} <span style="font-size:10px;opacity:.6">${e.tag}</span></span>
+        <span style="font-size:11px;color:var(--text-3)"><strong style="color:${over?'var(--expense)':warn?'var(--adjust)':'var(--text)'}">${fmt(e.spent)}</strong> / ${fmt(e.limit)}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill ${over?'danger':warn?'warning':''}" style="width:${Math.min(e.pct,100)}%"></div></div>
+      <div style="font-size:10px;color:var(--text-3);margin-top:3px">${over?`<strong style="color:var(--expense)">⚠ Acima do limite!</strong>`:warn?`<strong style="color:var(--adjust)">${e.pct.toFixed(0)}% usado</strong>`:e.pct.toFixed(0)+'% · '+fmt(e.limit-e.spent)+' restante'}</div>
+    </div>`;}).join('');
 }
 function renderUpcoming(){
   const td=today();
@@ -1304,20 +1373,42 @@ function renderInvestments(){
 function renderBudget(){
   document.getElementById('budget-month-label').textContent=mName(S.month,S.year);
   const mb=S.budgets.filter(b=>b.month===S.month&&b.year===S.year);
-  document.getElementById('budget-summary-text').textContent=`Planejado: ${fmt(mb.reduce((s,b)=>s+(+b.planned_amount),0))} | Gasto: ${fmt(monthTotals(S.month,S.year).exp)}`;
-  const el=document.getElementById('budget-list');
-  if(!mb.length){el.innerHTML=emptyState('🎯','Sem orçamento','Defina limites por categoria');return}
-  el.innerHTML=mb.map(b=>{
-    const c=S.categories.find(x=>x.id===b.category_id);
+  const fixedCats=S.categories.filter(c=>c.monthly_fixed>0&&c.type==='expense');
+  // Merge entries
+  const entries=[];const seen=new Set();
+  mb.forEach(b=>{
+    const c=S.categories.find(x=>x.id===b.category_id);if(!c)return;
+    seen.add(b.category_id);
     const spent=txForMonth(S.month,S.year).filter(t=>t.category_id===b.category_id&&t.type==='expense'&&(t.status==='paid'||t.status==='received')).reduce((s,t)=>s+(+t.amount),0);
-    const pct=b.planned_amount>0?(spent/b.planned_amount*100):0;
+    const limit=+b.planned_amount;const pct=limit>0?(spent/limit*100):0;
+    entries.push({c,spent,limit,pct,tag:'📊 Orçamento',budgetId:b.id});
+  });
+  fixedCats.forEach(c=>{
+    if(seen.has(c.id))return;
+    const spent=txForMonth(S.month,S.year).filter(t=>t.category_id===c.id&&t.type==='expense'&&(t.status==='paid'||t.status==='received')).reduce((s,t)=>s+(+t.amount),0);
+    const limit=+c.monthly_fixed;const pct=limit>0?(spent/limit*100):0;
+    entries.push({c,spent,limit,pct,tag:'🔒 Limite fixo',budgetId:null});
+  });
+  const totalPlanned=entries.reduce((s,e)=>s+e.limit,0);
+  document.getElementById('budget-summary-text').textContent=`Planejado: ${fmt(totalPlanned)} | Gasto: ${fmt(monthTotals(S.month,S.year).exp)}`;
+  const el=document.getElementById('budget-list');
+  if(!entries.length){el.innerHTML=emptyState('🎯','Sem orçamento','Defina limites por categoria ou use o campo "Valor fixo mensal" nas categorias');return}
+  entries.sort((a,b)=>b.pct-a.pct);
+  el.innerHTML=entries.map(e=>{
+    const over=e.pct>=100;const warn=e.pct>=80&&!over;
+    const removeBtn=e.budgetId?`<button onclick="removeBudget('${e.budgetId}')" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-3);padding:0 4px" title="Remover orçamento">✕</button>`:'';
     return`<div class="budget-item"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-      <span style="font-size:13px;font-weight:700">${c?.icon||'📌'} ${c?.name||'Categoria'}</span>
-      <span style="font-size:12px;color:var(--text-3)"><strong style="color:${pct>=100?'var(--expense)':'var(--text)'}">${fmt(spent)}</strong> / ${fmt(b.planned_amount)}</span></div>
-      <div class="progress-bar"><div class="progress-fill ${pct>=100?'danger':pct>=80?'warning':''}" style="width:${Math.min(pct,100)}%"></div></div>
-      <div style="font-size:11px;color:var(--text-3);margin-top:4px">${pct.toFixed(0)}% · ${fmt(Math.max(0,b.planned_amount-spent))} restante</div>
+      <span style="font-size:13px;font-weight:700">${e.c?.icon||'📌'} ${e.c?.name||'Categoria'} <span style="font-size:10px;font-weight:400;opacity:.65">${e.tag}</span></span>
+      <div style="display:flex;align-items:center;gap:4px">${removeBtn}<span style="font-size:12px;color:var(--text-3)"><strong style="color:${over?'var(--expense)':warn?'var(--adjust)':'var(--text)'}">${fmt(e.spent)}</strong> / ${fmt(e.limit)}</span></div></div>
+      <div class="progress-bar"><div class="progress-fill ${over?'danger':warn?'warning':''}" style="width:${Math.min(e.pct,100)}%"></div></div>
+      <div style="font-size:11px;margin-top:4px">${over?`<strong style="color:var(--expense)">⚠ Acima do limite em ${fmt(e.spent-e.limit)}!</strong>`:warn?`<strong style="color:var(--adjust)">${e.pct.toFixed(0)}% usado · ${fmt(e.limit-e.spent)} restante</strong>`:`<span style="color:var(--text-3)">${e.pct.toFixed(0)}% · ${fmt(e.limit-e.spent)} restante</span>`}</div>
     </div>`;
   }).join('');
+}
+async function removeBudget(id){
+  if(!confirm('Remover este orçamento?'))return;
+  await S.sb.from('budgets').delete().eq('id',id);
+  await loadBudgets();renderBudget();toast('Orçamento removido','success');
 }
 
 // BILLS
@@ -1709,7 +1800,14 @@ async function saveQuickTx(){
   if(!acc){toast('Selecione a conta','error');return}
   const btn=document.getElementById('btn-qt-save');btn.disabled=true;btn.textContent='Salvando...';
   try{
-    const data={user_id:S.user.id,type:_qType,description:document.getElementById('qt-desc').value.trim()||(_qType==='expense'?'Despesa':'Receita'),amount,account_id:acc,category_id:document.getElementById('qt-cat').value||null,date_competence:today(),date_cash:today(),paid_at:today(),status:_qType==='income'?'received':'paid',classification:'variable',include_in_reports:true,include_in_budget:true};
+    const catId=document.getElementById('qt-cat').value||null;
+    const cat=catId?S.categories.find(c=>c.id===catId):null;
+    let classification='variable';
+    if(cat?.monthly_fixed>0){
+      const monthSpent=txForMonth(S.month,S.year).filter(t=>t.category_id===catId&&t.type==='expense'&&(t.status==='paid'||t.status==='received')).reduce((s,t)=>s+(+t.amount),0);
+      classification=monthSpent+amount<=(+cat.monthly_fixed)?'fixed':'variable';
+    }
+    const data={user_id:S.user.id,type:_qType,description:document.getElementById('qt-desc').value.trim()||(_qType==='expense'?'Despesa':'Receita'),amount,account_id:acc,category_id:catId,date_competence:today(),date_cash:today(),paid_at:today(),status:_qType==='income'?'received':'paid',classification,include_in_reports:true,include_in_budget:true};
     const{error}=await S.sb.from('transactions').insert(data);
     if(error)throw error;
     await loadTransactions();closeSheet('quick-sheet');navigate(S.screen);
