@@ -290,7 +290,17 @@ input,select,textarea{font-family:var(--font)}
       <button class="filter-chip" onclick="setHistClass('variable',this)">Variável</button>
       <button class="filter-chip" onclick="setHistClass('occasional',this)">Eventual</button>
     </div>
-    <div class="month-nav"><button class="month-btn" onclick="changeMonth(-1)">‹</button><div class="month-label" id="hist-month-label"></div><button class="month-btn" onclick="changeMonth(1)">›</button></div>
+    <!-- SEARCH BAR -->
+    <div style="padding:8px 16px 0;display:flex;gap:8px;align-items:center">
+      <div style="flex:1;position:relative">
+        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text-3)">🔍</span>
+        <input id="hist-search" type="text" placeholder="Buscar em todos os lançamentos..." oninput="setHistSearch(this.value)"
+          style="width:100%;padding:8px 32px 8px 32px;border-radius:999px;border:1.5px solid var(--border);background:var(--bg-card);color:var(--text);font-size:13px;font-family:Nunito,sans-serif;box-sizing:border-box;outline:none">
+        <button id="hist-search-clear" onclick="clearHistSearch()" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--text-3);line-height:1">×</button>
+      </div>
+    </div>
+    <div id="hist-search-info" style="display:none;padding:4px 16px;font-size:12px;color:var(--text-3)"></div>
+    <div class="month-nav" id="hist-month-nav"><button class="month-btn" onclick="changeMonth(-1)">‹</button><div class="month-label" id="hist-month-label"></div><button class="month-btn" onclick="changeMonth(1)">›</button></div>
     <div id="history-list" class="card fade-in" style="margin:12px 16px"></div>
   </div>
 
@@ -1082,6 +1092,8 @@ function navigate(s){
 }
 function goBack(){navigate(BACK[S.screen]||'menu')}
 function goToHistFilter(f){
+  // Limpa busca ao navegar pelos cards do dashboard
+  clearHistSearch();
   S.histFilter=f;navigate('history');
   document.querySelectorAll('#hist-type-bar .filter-chip').forEach(b=>b.classList.remove('active'));
   const chips=document.querySelectorAll('#hist-type-bar .filter-chip');
@@ -1193,10 +1205,12 @@ function txRow(t){
   const sign=t.type==='income'?'+':t.type==='expense'?'-':'';
   const stCol={paid:'var(--income)',received:'var(--income)',pending:'var(--adjust)',overdue:'var(--expense)',scheduled:'var(--transfer)',forecast:'var(--text-3)',cancelled:'var(--text-3)'}[t.status]||'var(--text-3)';
   const attachIcon=t.attachment_url?`<a href="${t.attachment_url}" target="_blank" onclick="event.stopPropagation()" style="font-size:12px;text-decoration:none" title="Ver anexo">📎</a>`:'';
-  return`<div class="tx-item" onclick="editTx('${t.id}')">
+  const isPending=['pending','scheduled','forecast'].includes(t.status);
+  const rowStyle=isPending?'opacity:0.55;border-left:3px solid var(--adjust);':'';
+  return`<div class="tx-item" onclick="editTx('${t.id}')" style="${rowStyle}">
     <div class="tx-icon" style="background:var(--${tc}-bg)">${cat?.icon||tIcon(t.type)}</div>
-    <div class="tx-body"><div class="tx-desc">${t.description}${attachIcon}</div><div class="tx-meta">${cat?cat.name+' · ':''}${fmtDate(t.date_competence)}${acc?' · '+acc.name:''}</div>${renderTags(t.tags||[])}</div>
-    <div class="tx-right"><div class="tx-amount ${tc}">${sign}${fmt(t.amount)}</div><div style="font-size:11px;color:${stCol};font-weight:700;margin-top:2px">${statusLabel(t.status)}</div></div>
+    <div class="tx-body"><div class="tx-desc" style="${isPending?'color:var(--text-2)':''}">${t.description}${attachIcon}</div><div class="tx-meta">${cat?cat.name+' · ':''}${fmtDate(t.date_competence)}${acc?' · '+acc.name:''}</div>${renderTags(t.tags||[])}</div>
+    <div class="tx-right"><div class="tx-amount ${tc}" style="${isPending?'opacity:0.7':''}">${sign}${fmt(t.amount)}</div><div style="font-size:11px;color:${stCol};font-weight:700;margin-top:2px">${statusLabel(t.status)}</div></div>
   </div>`;
 }
 function renderDashChart(){
@@ -1213,24 +1227,48 @@ function renderCatChart(){
 }
 
 // HISTORY
-let _histAccount='',_histClass='';
+let _histAccount='',_histClass='',_histSearch='';
 function renderHistory(){
   document.getElementById('hist-month-label').textContent=mName(S.month,S.year);
   // Popular filtro de contas
   const sel=document.getElementById('hist-acc-sel');
   if(sel){sel.innerHTML=`<option value="">Todas as contas</option>`+S.accounts.map(a=>`<option value="${a.id}"${_histAccount===a.id?' selected':''}>${a.name}</option>`).join('')}
-  let txs=txForMonth(S.month,S.year);
+  const searching=_histSearch.trim().length>0;
+  const info=document.getElementById('hist-search-info');
+  const monthNav=document.getElementById('hist-month-nav');
+  // Search mode: busca em TODOS os lançamentos (ignora mês)
+  let txs=searching?[...S.transactions]:txForMonth(S.month,S.year);
   if(S.histFilter!=='all')txs=txs.filter(t=>t.type===S.histFilter);
   if(_histAccount)txs=txs.filter(t=>t.account_id===_histAccount||t.destination_account_id===_histAccount);
   if(_histClass)txs=txs.filter(t=>t.classification===_histClass);
+  if(searching){
+    const q=_histSearch.trim().toLowerCase();
+    txs=txs.filter(t=>t.description?.toLowerCase().includes(q)||(S.categories.find(c=>c.id===t.category_id)?.name||'').toLowerCase().includes(q));
+    info.style.display='block';info.textContent=`${txs.length} resultado(s) para "${_histSearch.trim()}" em todo o histórico`;
+    monthNav.style.display='none';
+  }else{
+    info.style.display='none';monthNav.style.display='';
+  }
   txs.sort((a,b)=>new Date(b.date_competence)-new Date(a.date_competence));
   const el=document.getElementById('history-list');
-  if(!txs.length){el.innerHTML=emptyState('📋','Sem lançamentos','Não há lançamentos neste período');return}
+  if(!txs.length){el.innerHTML=emptyState('🔍','Sem resultados',searching?`Nenhum lançamento encontrado para "${_histSearch.trim()}"` :'Não há lançamentos neste período');return}
   const groups={};txs.forEach(t=>{if(!groups[t.date_competence])groups[t.date_competence]=[];groups[t.date_competence].push(t)});
   el.innerHTML=Object.entries(groups).sort((a,b)=>new Date(b[0])-new Date(a[0])).map(([d,ts])=>{
     const dt=ts.reduce((s,t)=>(t.type==='income'?s+(+t.amount):t.type==='expense'?s-(+t.amount):s),0);
     return`<div><div style="padding:8px 16px;background:var(--bg-hover);display:flex;justify-content:space-between;border-bottom:1px solid var(--border)"><span style="font-size:12px;font-weight:800;color:var(--text-2)">${fmtDate(d)}</span><span style="font-size:12px;font-weight:800;color:${dt>=0?'var(--income)':'var(--expense)'}">${dt>=0?'+':''}${fmt(dt)}</span></div><div class="tx-list">${ts.map(txRow).join('')}</div></div>`;
   }).join('');
+}
+function setHistSearch(v){
+  _histSearch=v;
+  const clr=document.getElementById('hist-search-clear');
+  if(clr)clr.style.display=v?'block':'none';
+  renderHistory();
+}
+function clearHistSearch(){
+  _histSearch='';
+  const inp=document.getElementById('hist-search');if(inp)inp.value='';
+  const clr=document.getElementById('hist-search-clear');if(clr)clr.style.display='none';
+  renderHistory();
 }
 function setHistFilter(f,btn){S.histFilter=f;document.querySelectorAll('#hist-type-bar .filter-chip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderHistory()}
 function setHistAccount(v){_histAccount=v;renderHistory()}
