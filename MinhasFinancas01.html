@@ -694,6 +694,7 @@ input,select,textarea{font-family:var(--font)}
     <div class="form-group"><label class="form-label">Tipo</label>
       <select class="form-input form-select" id="acc-type">
         <option value="checking">Conta corrente</option><option value="savings">Poupança</option>
+        <option value="credit_card">Cartão de crédito</option>
         <option value="cash">Dinheiro em espécie</option><option value="wallet">Carteira física</option>
         <option value="digital">Conta digital</option><option value="prepaid">Cartão pré-pago</option>
         <option value="investment">Investimento</option><option value="loan">Empréstimo</option>
@@ -930,7 +931,7 @@ function toast(msg,type=''){
 const emptyState=(ic,t,d)=>`<div class="empty-state"><div class="empty-state-icon">${ic}</div><h3>${t}</h3><p>${d}</p></div>`;
 const tIcon=t=>({income:'💚',expense:'🔴',transfer:'🔵',invest:'🟣',adjust:'⚡',estorno:'🔄'}[t]||'💰');
 const tColor=t=>({income:'income',expense:'expense',transfer:'transfer',invest:'invest',adjust:'adjust',estorno:'estorno'}[t]||'income');
-const accTypeLabel=t=>({checking:'Conta corrente',savings:'Poupança',cash:'Espécie',wallet:'Carteira',digital:'Digital',prepaid:'Pré-pago',investment:'Investimento',loan:'Empréstimo',financing:'Financiamento',reserve:'Reserva',other:'Outros'}[t]||t);
+const accTypeLabel=t=>({checking:'Conta corrente',savings:'Poupança',credit_card:'Cartão de crédito',cash:'Espécie',wallet:'Carteira',digital:'Digital',prepaid:'Pré-pago',investment:'Investimento',loan:'Empréstimo',financing:'Financiamento',reserve:'Reserva',other:'Outros'}[t]||t);
 const invTypeLabel=t=>({savings:'Poupança',cdb:'CDB',treasury:'Tesouro Direto',fund:'Fundo',stocks:'Ações',fii:'FII',pension:'Previdência',crypto:'Cripto',other:'Outros'}[t]||t);
 const statusLabel=s=>({paid:'Pago',received:'Recebido',pending:'Pendente',scheduled:'Agendado',overdue:'Atrasado',cancelled:'Cancelado',forecast:'Previsto'}[s]||s);
 function confirmAction(title,body,fn){
