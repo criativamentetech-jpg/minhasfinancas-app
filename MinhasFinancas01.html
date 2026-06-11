@@ -268,8 +268,12 @@ input,select,textarea{font-family:var(--font)}
       <div class="section-hdr"><h2>🎯 Limites do mês</h2><a onclick="navigate('budget')">Ver todos</a></div>
       <div class="card" style="margin:0 16px 12px;padding:0;overflow:hidden" id="dash-budget-list"></div>
     </div>
-    <div class="section-hdr"><h2>Últimos lançamentos</h2><a onclick="navigate('history')">Ver todos</a></div>
-    <div class="card" style="margin:0 16px 16px" id="dash-tx-list"></div>
+    <div class="section-hdr"><h2>Últimos pagamentos</h2><a onclick="navigate('history')">Ver todos</a></div>
+    <div class="card" style="margin:0 16px 12px" id="dash-paid-list"></div>
+    <div id="dash-future-wrap" style="display:none">
+      <div class="section-hdr"><h2>📅 Lançamentos futuros</h2><a onclick="navigate('bills')">Ver todos</a></div>
+      <div class="card" style="margin:0 16px 16px" id="dash-future-list"></div>
+    </div>
   </div>
 
   <!-- HISTORY -->
@@ -1165,6 +1169,31 @@ function goToBills(f){
   const map={pay:0,receive:1,overdue:2};
   if(map[f]!==undefined&&chips[map[f]])chips[map[f]].classList.add('active');
 }
+// Contas fixadas no dashboard (localStorage)
+function getPinnedAccIds(){return JSON.parse(localStorage.getItem('mf-pinned-accs')||'[]')}
+function setPinnedAccIds(ids){localStorage.setItem('mf-pinned-accs',JSON.stringify(ids))}
+function togglePinAccount(id){
+  let ids=getPinnedAccIds();
+  if(ids.includes(id))ids=ids.filter(x=>x!==id);
+  else ids.push(id);
+  setPinnedAccIds(ids);renderAccounts();
+}
+function getDashAccounts(){
+  const pinned=getPinnedAccIds();
+  if(pinned.length){
+    const accs=pinned.map(id=>S.accounts.find(a=>a.id===id)).filter(Boolean);
+    if(accs.length)return accs;
+  }
+  // Fallback: crédito → corrente/digital → outros, até 3
+  const priority=['credit_card','checking','digital','savings'];
+  return S.accounts.filter(a=>priority.includes(a.type)).sort((a,b)=>priority.indexOf(a.type)-priority.indexOf(b.type)).slice(0,3);
+}
+// Abre extrato filtrado pela conta
+function openAccHistory(accId){
+  clearHistSearch();_histAccount=accId;S.histFilter='all';navigate('history');
+  document.querySelectorAll('#hist-type-bar .filter-chip').forEach(b=>b.classList.remove('active'));
+  const chips=document.querySelectorAll('#hist-type-bar .filter-chip');if(chips[0])chips[0].classList.add('active');
+}
 function changeMonth(d){S.month+=d;if(S.month>12){S.month=1;S.year++}if(S.month<1){S.month=12;S.year--}navigate(S.screen)}
 
 // DASHBOARD
@@ -1180,15 +1209,23 @@ function renderDash(){
   document.getElementById('dash-income').textContent=fmt(inc);document.getElementById('dash-expense').textContent=fmt(exp);
   document.getElementById('dash-to-pay').textContent=fmt(pay);document.getElementById('dash-to-receive').textContent=fmt(rec);
   const al=document.getElementById('dash-accounts-list');
-  al.innerHTML=!S.accounts.length?emptyState('🏦','Nenhuma conta','Crie sua primeira conta para começar')
-    :S.accounts.slice(0,5).map(a=>`<div class="account-card" onclick="navigate('accounts')">
+  const dashAccs=getDashAccounts();
+  al.innerHTML=!dashAccs.length?emptyState('🏦','Nenhuma conta','Crie sua primeira conta para começar')
+    :dashAccs.map(a=>`<div class="account-card">
       <div class="account-icon" style="background:${a.color}22">${a.icon||'🏦'}</div>
-      <div style="flex:1"><div style="font-size:14px;font-weight:700">${a.name}</div><div style="font-size:12px;color:var(--text-3)">${accTypeLabel(a.type)}</div></div>
-      <div class="privacy" style="font-size:16px;font-weight:800;color:${accBal(a.id)<0?'var(--expense)':'var(--text)'}">${fmt(accBal(a.id))}</div>
+      <div style="flex:1;cursor:pointer;min-width:0" onclick="openAccountModal('${a.id}')">
+        <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}</div>
+        <div style="font-size:12px;color:var(--text-3)">${accTypeLabel(a.type)}</div>
+      </div>
+      <div class="privacy" onclick="openAccHistory('${a.id}')" style="font-size:16px;font-weight:800;color:${accBal(a.id)<0?'var(--expense)':'var(--text)'};cursor:pointer;padding-left:12px;flex-shrink:0" title="Ver extrato">${fmt(accBal(a.id))}</div>
     </div>`).join('');
-  const txs=txForMonth(S.month,S.year).slice(0,8);
-  document.getElementById('dash-tx-list').innerHTML=!txs.length?emptyState('💸','Sem lançamentos','Toque em + para adicionar')
-    :`<div class="tx-list">${txs.map(txRow).join('')}</div>`;
+  // Últimos pagamentos (paid/received, todos os tempos, mais recentes primeiro)
+  const paid=[...S.transactions].filter(t=>t.status==='paid'||t.status==='received').sort((a,b)=>b.date_competence.localeCompare(a.date_competence)).slice(0,5);
+  document.getElementById('dash-paid-list').innerHTML=!paid.length?emptyState('💸','Sem pagamentos','Toque em + para adicionar'):`<div class="tx-list">${paid.map(txRow).join('')}</div>`;
+  // Lançamentos futuros (pending/scheduled/forecast, mais próximos primeiro)
+  const future=S.transactions.filter(t=>['pending','scheduled','forecast'].includes(t.status)).sort((a,b)=>(a.due_date||a.date_competence).localeCompare(b.due_date||b.date_competence)).slice(0,5);
+  const fw=document.getElementById('dash-future-wrap');
+  if(!future.length){fw.style.display='none';}else{fw.style.display='block';document.getElementById('dash-future-list').innerHTML=`<div class="tx-list">${future.map(txRow).join('')}</div>`;}
   renderUpcoming();
   renderDashChart();renderCatChart();renderDashBudget();
 }
@@ -1458,10 +1495,18 @@ function renderAccounts(){
       const realIncome=S.transactions.filter(t=>t.account_id===a.id&&t.type==='income'&&t.status==='received'&&t.date_competence?.startsWith(`${S.year}-${String(S.month).padStart(2,'0')}`)).reduce((s,t)=>s+(+t.amount),0);
       yieldInfo=`<div style="font-size:11px;margin-top:3px"><span style="color:var(--text-3)">Esp.</span> <span class="privacy" style="color:var(--income);font-weight:700">${fmt(monthlyNet)}</span><span style="color:var(--text-3)"> · Real </span><span class="privacy" style="color:${realIncome>=monthlyNet?'var(--income)':'var(--expense)'};font-weight:700">${fmt(realIncome)}</span></div>`;
     }
-    return`<div class="account-card" onclick="openAccountModal('${a.id}')">
-    <div class="account-icon" style="background:${a.color}22">${a.icon||'🏦'}</div>
-    <div style="flex:1"><div style="font-size:14px;font-weight:700">${a.name}</div><div style="font-size:12px;color:var(--text-3)">${accTypeLabel(a.type)}</div>${yieldInfo}</div>
-    <div style="text-align:right"><div class="acc-bal-val" style="font-size:16px;font-weight:800;color:${bal<0?'var(--expense)':'var(--text)'}">${fmt(bal)}</div><div style="font-size:11px;color:var(--text-3)">inicial: ${fmt(a.initial_balance)}</div></div>
+    const pinned=getPinnedAccIds().includes(a.id);
+    return`<div class="account-card">
+    <div class="account-icon" style="background:${a.color}22;cursor:pointer" onclick="openAccountModal('${a.id}')">${a.icon||'🏦'}</div>
+    <div style="flex:1;cursor:pointer;min-width:0" onclick="openAccountModal('${a.id}')">
+      <div style="font-size:14px;font-weight:700">${a.name}</div>
+      <div style="font-size:12px;color:var(--text-3)">${accTypeLabel(a.type)}</div>${yieldInfo}
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+      <button onclick="event.stopPropagation();togglePinAccount('${a.id}')" title="${pinned?'Remover do início':'Fixar no início'}" style="background:none;border:none;cursor:pointer;font-size:16px;padding:0;line-height:1;opacity:${pinned?1:.3}">${pinned?'📌':'📌'}</button>
+      <div class="acc-bal-val" style="font-size:15px;font-weight:800;color:${bal<0?'var(--expense)':'var(--text)'}">${fmt(bal)}</div>
+      <div style="font-size:10px;color:var(--text-3)">inicial: ${fmt(a.initial_balance)}</div>
+    </div>
   </div>`;}).join('');
 }
 
