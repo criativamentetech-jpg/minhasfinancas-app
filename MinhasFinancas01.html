@@ -319,6 +319,8 @@ input,select,textarea{font-family:var(--font)}
     <div class="chart-card"><div class="chart-title">Fixo × Variável × Eventual</div><div class="chart-wrap" style="height:150px"><canvas id="chart-rep-class"></canvas></div></div>
     <div class="section-hdr"><h2>Maiores despesas do mês</h2></div>
     <div class="card" style="margin:0 16px 12px" id="rep-top-expenses"></div>
+    <div class="section-hdr"><h2>Gastos por grupo e subcategoria</h2></div>
+    <div class="card" style="margin:0 16px 16px;padding:0;overflow:hidden" id="rep-cat-groups"></div>
   </div>
 
   <!-- MENU -->
@@ -1099,6 +1101,24 @@ function projectedBal(m,y){
   });
   return b;
 }
+// Returns hierarchical groups: [{parent, total, children:[{cat,total}]}]
+function catTotalsGrouped(m,y){
+  const txs=txForMonth(m,y).filter(t=>(t.type==='expense'||t.type==='estorno')&&(t.status==='paid'||t.status==='received'));
+  const groups={};
+  txs.forEach(t=>{
+    const cat=S.categories.find(c=>c.id===t.category_id);
+    const amt=t.type==='estorno'?-(+t.amount):+t.amount;
+    const parentId=cat?.parent_id||cat?.id||'_none';
+    const parent=cat?.parent_id?S.categories.find(c=>c.id===cat.parent_id):cat;
+    if(!groups[parentId])groups[parentId]={parent:parent||{name:'Sem categoria',icon:'📌',id:'_none'},total:0,children:{}};
+    groups[parentId].total+=amt;
+    if(cat?.parent_id){
+      if(!groups[parentId].children[cat.id])groups[parentId].children[cat.id]={cat,total:0};
+      groups[parentId].children[cat.id].total+=amt;
+    }
+  });
+  return Object.values(groups).sort((a,b)=>b.total-a.total);
+}
 function catTotals(m,y){
   const map={};
   txForMonth(m,y).filter(t=>(t.type==='expense'||t.type==='estorno')&&(t.status==='paid'||t.status==='received')).forEach(t=>{
@@ -1392,6 +1412,33 @@ function renderReports(){
   S.charts.repCl=new Chart(clctx,{type:'doughnut',data:{labels:['Fixo','Variável','Eventual'],datasets:[{data:[cls.fixed,cls.variable,cls.occasional],backgroundColor:['#2563eb','#d97706','#dc2626'],borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:richLegend()},datalabels:{display:false}}}});
   const top=[...txs].sort((a,b)=>+b.amount-+a.amount).slice(0,5);
   document.getElementById('rep-top-expenses').innerHTML=!top.length?emptyState('📊','Sem despesas pagas','Pague lançamentos para aparecer aqui'):`<div class="tx-list">${top.map(txRow).join('')}</div>`;
+  // Gastos por grupo e subcategoria
+  const groups=catTotalsGrouped(S.month,S.year);
+  const grpEl=document.getElementById('rep-cat-groups');
+  if(!groups.length){grpEl.innerHTML=emptyState('📂','Sem dados','Nenhuma despesa categorizada no mês');return}
+  grpEl.innerHTML=groups.map((g,gi)=>{
+    const children=Object.values(g.children).sort((a,b)=>b.total-a.total);
+    const hasSubs=children.length>0;
+    const border=gi<groups.length-1?'border-bottom:2px solid var(--border);':'';
+    const subsHtml=hasSubs?children.map(c=>{
+      const pct=g.total>0?Math.min(c.total/g.total*100,100):0;
+      const subColor=c.cat.color||'var(--primary)';
+      return`<div style="padding:6px 14px 6px 28px;border-bottom:1px solid var(--border)22;display:flex;align-items:center;gap:8px">
+        <div style="flex:1">
+          <div style="font-size:12px;color:var(--text-2);font-weight:600">${c.cat.icon||'└'} ${c.cat.name}</div>
+          <div style="height:3px;border-radius:2px;background:var(--border);margin-top:4px"><div style="height:3px;border-radius:2px;background:${subColor};width:${pct}%"></div></div>
+        </div>
+        <div style="font-size:12px;font-weight:700;color:var(--text-2);text-align:right;white-space:nowrap">${fmt(c.total)}<br><span style="font-size:10px;font-weight:400;color:var(--text-3)">${pct.toFixed(0)}%</span></div>
+      </div>`;
+    }).join(''):'';
+    return`<div style="${border}">
+      <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;background:var(--bg-hover)">
+        <span style="font-size:13px;font-weight:800">${g.parent.icon||'📌'} ${g.parent.name}</span>
+        <span style="font-size:13px;font-weight:800;color:var(--expense)">${fmt(g.total)}</span>
+      </div>
+      ${subsHtml}
+    </div>`;
+  }).join('');
 }
 
 // ACCOUNTS
@@ -1870,8 +1917,7 @@ function openQuickSheet(){
   const defAcc=S.settings.default_expense_account_id;
   const accOpts=S.accounts.map(a=>`<option value="${a.id}"${a.id===defAcc?' selected':''}>${a.name}</option>`).join('');
   document.getElementById('qt-acc').innerHTML=`<option value="">Selecione</option>${accOpts}`;
-  const cats=S.categories.filter(c=>c.type==='expense'&&!c.parent_id);
-  document.getElementById('qt-cat').innerHTML=`<option value="">Sem categoria</option>`+cats.map(c=>`<option value="${c.id}">${c.icon||'📌'} ${c.name}</option>`).join('');
+  // setQType already builds the category list with subcategories
   renderQuickFavs();
   openSheet('quick-sheet');
   setTimeout(()=>document.getElementById('qt-amount').focus(),300);
