@@ -1029,7 +1029,7 @@ async function loadCategories(){const{data}=await S.sb.from('categories').select
 async function loadTransactions(){
   const all=[];const PAGE=1000;let from=0;
   while(true){
-    const{data}=await S.sb.from('transactions').select('*').eq('user_id',S.user.id).order('date_competence',{ascending:false}).range(from,from+PAGE-1);
+    const{data}=await S.sb.from('transactions').select('*').eq('user_id',S.user.id).order('date_competence',{ascending:false}).order('id',{ascending:true}).range(from,from+PAGE-1);
     if(!data||!data.length)break;
     all.push(...data);
     if(data.length<PAGE)break;
