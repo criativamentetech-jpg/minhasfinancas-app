@@ -659,7 +659,7 @@ input,select,textarea{font-family:var(--font)}
     </div>
     <div class="form-group" style="margin-bottom:16px">
       <label class="form-label">Valor (R$) *</label>
-      <input class="form-input" id="qt-amount" type="number" step="0.01" min="0.01" placeholder="0,00" inputmode="decimal" style="font-size:28px;font-weight:900;text-align:center;height:64px">
+      <input class="form-input" id="qt-amount" type="text" inputmode="numeric" placeholder="R$ 0,00" style="font-size:28px;font-weight:900;text-align:center;height:64px">
     </div>
     <div class="form-group">
       <label class="form-label">Descrição (opcional)</label>
@@ -947,6 +947,32 @@ const emptyState=(ic,t,d)=>`<div class="empty-state"><div class="empty-state-ico
 const tIcon=t=>({income:'💚',expense:'🔴',transfer:'🔵',invest:'🟣',adjust:'⚡',estorno:'🔄'}[t]||'💰');
 const tColor=t=>({income:'income',expense:'expense',transfer:'transfer',invest:'invest',adjust:'adjust',estorno:'estorno'}[t]||'income');
 const accTypeLabel=t=>({checking:'Conta corrente',savings:'Poupança',credit_card:'Cartão de crédito',cash:'Espécie',wallet:'Carteira',digital:'Digital',prepaid:'Pré-pago',investment:'Investimento',loan:'Empréstimo',financing:'Financiamento',reserve:'Reserva',other:'Outros'}[t]||t);
+function initMoneyInput(el,initVal,onChange){
+  el.type='text';el.inputMode='numeric';
+  const fmtCents=c=>(c/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const cents=Math.round((parseFloat(initVal)||0)*100);
+  el.dataset.cents=String(cents);
+  el.value=cents>0?'R$ '+fmtCents(cents):'';
+  if(!cents)el.placeholder='R$ 0,00';
+  el.addEventListener('input',function(){
+    const d=this.value.replace(/\D/g,'');
+    const c=parseInt(d||'0',10);
+    this.dataset.cents=String(c);
+    this.value=c>0?'R$ '+fmtCents(c):'';
+    if(onChange)onChange();
+  });
+}
+function parseMoney(id){const el=typeof id==='string'?document.getElementById(id):id;return parseInt(el?.dataset?.cents||'0',10)/100;}
+function clearMoneyInput(id){const el=typeof id==='string'?document.getElementById(id):id;if(el){el.dataset.cents='0';el.value='';}}
+function updateParcelasHint(){
+  const parcelas=parseInt(document.getElementById('tf-parcelas')?.value)||1;
+  const total=parseMoney('tf-amount');
+  const el=document.getElementById('tf-parcelas-hint');
+  if(!el)return;
+  if(parcelas<=1||!total){el.textContent='Sem parcelamento';return;}
+  const each=Math.round(total*100/parcelas)/100;
+  el.textContent=`${parcelas}× de ${fmt(each)}`;
+}
 const invTypeLabel=t=>({savings:'Poupança',cdb:'CDB',treasury:'Tesouro Direto',fund:'Fundo',stocks:'Ações',fii:'FII',pension:'Previdência',crypto:'Cripto',other:'Outros'}[t]||t);
 const statusLabel=s=>({paid:'Pago',received:'Recebido',pending:'Pendente',scheduled:'Agendado',overdue:'Atrasado',cancelled:'Cancelado',forecast:'Previsto'}[s]||s);
 function confirmAction(title,body,fn){
@@ -1017,6 +1043,7 @@ async function initApp(){
   setTimeout(()=>checkBillNotifications(),3000); // checa 3s após login
   await loadAll();
   document.getElementById('loading-overlay').style.display='none';
+  initMoneyInput(document.getElementById('qt-amount'));
   navigate('dashboard');
   // Restaurar modo privacidade da sessão anterior
   S.privacy=localStorage.getItem('mf-privacy')==='1';
@@ -1840,7 +1867,9 @@ function buildTxForm(){
     <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input form-textarea" id="tf-notes">${t?.notes||''}</textarea></div>`;
   }else{
     html=`<div class="form-group"><label class="form-label">Descrição *</label><input class="form-input" id="tf-desc" placeholder="${type==='income'?'Ex: Salário, Venda':'Ex: Supermercado, Aluguel'}" value="${t?.description||pf.desc||''}"></div>
-    <div class="form-group"><label class="form-label">Valor (R$) *</label><input class="form-input" id="tf-amount" type="number" step="0.01" min="0.01" placeholder="0,00" value="${t?.amount||pf.amount||''}"></div>
+    <div class="form-group"><label class="form-label">Valor (R$) *</label><input class="form-input" id="tf-amount" type="text" inputmode="numeric" placeholder="R$ 0,00" data-init="${t?.amount||pf.amount||0}"></div>
+    ${type==='expense'&&!S.editId?`<div class="form-row" style="margin-bottom:14px"><div class="form-group" style="margin-bottom:0"><label class="form-label">Parcelas</label><input class="form-input" id="tf-parcelas" type="number" min="1" max="48" value="1" style="text-align:center" oninput="updateParcelasHint()"></div><div class="form-group" style="margin-bottom:0;display:flex;align-items:flex-end"><div id="tf-parcelas-hint" style="font-size:12px;color:var(--text-3);padding-bottom:8px">Sem parcelamento</div></div></div>`:''}
+
     <div class="form-row">
       <div class="form-group"><label class="form-label">Data *</label><input class="form-input" id="tf-date" type="date" value="${t?.date_competence||td}"></div>
       <div class="form-group"><label class="form-label">Data pagamento</label><input class="form-input" id="tf-date-cash" type="date" value="${t?.date_cash||t?.paid_at||''}"></div>
@@ -1899,12 +1928,14 @@ function buildTxForm(){
   }
   html+=`<div style="display:flex;gap:8px;margin-top:4px"><button class="btn btn-primary flex-1 btn-lg" id="btn-save-tx" onclick="saveTx()" style="flex:1">${S.editId?'Salvar alterações':'Salvar lançamento'}</button>${S.editId?`<button class="btn btn-danger btn-lg" onclick="deleteTx('${S.editId}')">🗑️</button>`:''}</div>`;
   document.getElementById('tx-form').innerHTML=html;
+  const tfAmt=document.getElementById('tf-amount');
+  if(tfAmt)initMoneyInput(tfAmt,tfAmt.dataset.init,updateParcelasHint);
 }
 async function saveTx(){
   const type=S.txType;const btn=document.getElementById('btn-save-tx');if(btn){btn.disabled=true;btn.textContent='Salvando...'}
   try{
     const desc=document.getElementById('tf-desc')?.value?.trim();
-    const amount=parseFloat(document.getElementById('tf-amount')?.value);
+    const amount=parseMoney('tf-amount');
     const date=document.getElementById('tf-date')?.value;
     if(!amount||amount===0)throw new Error('Informe o valor');if(!date)throw new Error('Informe a data');
     let data={};
@@ -1937,25 +1968,38 @@ async function saveTx(){
       toast('Atualizado!','success');
     }
     else{
-      const{error,data:nd}=await S.sb.from('transactions').insert(data).select().single();if(error)throw error;
-      if(attachFile&&nd?.id){const url=await uploadAttachment(attachFile,nd.id);if(url)await S.sb.from('transactions').update({attachment_url:url}).eq('id',nd.id);}
-      // Recorrência
-      const repeat=document.getElementById('tf-repeat')?.value;
-      const qty=parseInt(document.getElementById('tf-repeat-qty')?.value)||12;
-      if(repeat&&qty>1){
+      const parcelas=parseInt(document.getElementById('tf-parcelas')?.value)||1;
+      if(parcelas>1){
         const base=new Date(date+'T12:00:00');
+        const installAmt=Math.round(amount*100/parcelas)/100;
         const batch=[];
-        for(let i=1;i<qty;i++){
-          const next=new Date(base);
-          if(repeat==='monthly')next.setMonth(next.getMonth()+i);
-          else if(repeat==='weekly')next.setDate(next.getDate()+7*i);
-          else if(repeat==='biweekly')next.setDate(next.getDate()+14*i);
-          else if(repeat==='yearly')next.setFullYear(next.getFullYear()+i);
-          batch.push({...data,date_competence:next.toISOString().split('T')[0],date_cash:null,paid_at:null,status:'pending'});
+        for(let i=0;i<parcelas;i++){
+          const next=new Date(base);next.setMonth(next.getMonth()+i);
+          batch.push({...data,amount:installAmt,description:`${data.description} (${i+1}/${parcelas})`,date_competence:next.toISOString().split('T')[0],date_cash:i===0?data.date_cash:null,paid_at:i===0?data.paid_at:null,status:i===0?data.status:'pending'});
         }
         for(let i=0;i<batch.length;i+=50)await S.sb.from('transactions').insert(batch.slice(i,i+50));
-        toast(`🔁 ${qty}x criados!`,'success');
-      }else{toast('Lançamento salvo!','success')}
+        toast(`💳 ${parcelas}× parcelas criadas!`,'success');
+      }else{
+        const{error,data:nd}=await S.sb.from('transactions').insert(data).select().single();if(error)throw error;
+        if(attachFile&&nd?.id){const url=await uploadAttachment(attachFile,nd.id);if(url)await S.sb.from('transactions').update({attachment_url:url}).eq('id',nd.id);}
+        // Recorrência
+        const repeat=document.getElementById('tf-repeat')?.value;
+        const qty=parseInt(document.getElementById('tf-repeat-qty')?.value)||12;
+        if(repeat&&qty>1){
+          const base=new Date(date+'T12:00:00');
+          const batch=[];
+          for(let i=1;i<qty;i++){
+            const next=new Date(base);
+            if(repeat==='monthly')next.setMonth(next.getMonth()+i);
+            else if(repeat==='weekly')next.setDate(next.getDate()+7*i);
+            else if(repeat==='biweekly')next.setDate(next.getDate()+14*i);
+            else if(repeat==='yearly')next.setFullYear(next.getFullYear()+i);
+            batch.push({...data,date_competence:next.toISOString().split('T')[0],date_cash:null,paid_at:null,status:'pending'});
+          }
+          for(let i=0;i<batch.length;i+=50)await S.sb.from('transactions').insert(batch.slice(i,i+50));
+          toast(`🔁 ${qty}x criados!`,'success');
+        }else{toast('Lançamento salvo!','success')}
+      }
     }
     await loadTransactions();closeSheet('tx-sheet');S.editId=null;navigate(S.screen);
   }catch(e){toast(e.message||'Erro ao salvar','error')}
@@ -2082,7 +2126,7 @@ let _qType='expense';
 function openQuickSheet(){
   _qType='expense';
   setQType('expense');
-  document.getElementById('qt-amount').value='';
+  clearMoneyInput('qt-amount');
   document.getElementById('qt-desc').value='';
   const defAcc=S.settings.default_expense_account_id;
   const accOpts=S.accounts.map(a=>`<option value="${a.id}"${a.id===defAcc?' selected':''}>${a.name}</option>`).join('');
@@ -2107,7 +2151,7 @@ function setQType(type){
   if(accEl&&defAcc){accEl.value=defAcc}
 }
 async function saveQuickTx(){
-  const amount=parseFloat(document.getElementById('qt-amount').value);
+  const amount=parseMoney('qt-amount');
   const acc=document.getElementById('qt-acc').value;
   if(!amount||amount<=0){toast('Informe o valor','error');return}
   if(!acc){toast('Selecione a conta','error');return}
@@ -2129,7 +2173,7 @@ async function saveQuickTx(){
   finally{btn.disabled=false;btn.textContent='💾 Salvar'}
 }
 function switchToFull(){
-  const amount=document.getElementById('qt-amount').value;
+  const amount=parseMoney('qt-amount');
   const acc=document.getElementById('qt-acc').value;
   const cat=document.getElementById('qt-cat').value;
   const desc=document.getElementById('qt-desc').value;
@@ -2170,7 +2214,7 @@ function applyQuickFav(idx){
   if(catEl&&f.categoryId)catEl.value=f.categoryId;
   const descEl=document.getElementById('qt-desc');
   if(descEl)descEl.value=f.description||'';
-  document.getElementById('qt-amount').value='';
+  clearMoneyInput('qt-amount');
   setTimeout(()=>document.getElementById('qt-amount').focus(),50);
 }
 function saveQuickFav(){
@@ -2513,7 +2557,7 @@ function addSplitRow(){
   document.getElementById('tf-split-rows').appendChild(div);
 }
 function updateSplitRemaining(){
-  const total=parseFloat(document.getElementById('tf-amount')?.value)||0;
+  const total=parseMoney('tf-amount');
   const used=Array.from(document.querySelectorAll('.split-amt')).reduce((s,i)=>s+(parseFloat(i.value)||0),0);
   const rem=total-used;
   const el=document.getElementById('tf-split-remaining');
