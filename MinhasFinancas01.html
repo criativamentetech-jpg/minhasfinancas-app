@@ -1323,13 +1323,15 @@ function renderUpcoming(){
   document.getElementById('dash-upcoming-title').textContent=`⏰ Vencem em breve (${list.length})${late?' · '+late+' atrasado(s)':''}`;
   document.getElementById('dash-upcoming-list').innerHTML=`<div class="tx-list">${list.map(t=>{
     const due=t.due_date||t.date_competence;const isLate=due<td;
-    return`<div class="tx-item" onclick="navigate('bills')">
+    return`<div class="tx-item" onclick="editTx('${t.id}')">
       <div class="tx-icon" style="background:var(--${isLate?'expense':'adjust'}-bg)">${isLate?'⚠️':'📅'}</div>
       <div class="tx-body"><div class="tx-desc">${t.description}</div>
         <div class="tx-meta">Vence: <span style="color:${isLate?'var(--expense)':'inherit'};font-weight:${isLate?800:400}">${fmtDate(due)}</span></div>
       </div>
       <div class="tx-right"><div class="tx-amount ${tColor(t.type)}">${fmt(t.amount)}</div>
-        <div style="font-size:11px;font-weight:700;color:${isLate?'var(--expense)':'var(--adjust)'}">${isLate?'ATRASADO':statusLabel(t.status)}</div>
+        <div style="display:flex;gap:4px;margin-top:4px;justify-content:flex-end">
+          <button class="btn btn-primary btn-sm" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();markPaid('${t.id}','${t.type}')">${t.type==='income'?'Receber':'Pagar'}</button>
+        </div>
       </div>
     </div>`;}).join('')}</div>`;
 }
@@ -1765,10 +1767,13 @@ function renderBills(){
   if(!txs.length){el.innerHTML=emptyState('✅','Tudo em dia!','Nenhum compromisso pendente');return}
   el.innerHTML=`<div style="padding:10px 16px;background:var(--bg-hover);border-bottom:1px solid var(--border);font-size:13px;font-weight:700">Total: <strong>${fmt(txs.reduce((s,t)=>s+(+t.amount),0))}</strong></div>
   <div class="tx-list">${txs.map(t=>{const due=t.due_date||t.date_competence;const late=due<td;
-    return`<div class="tx-item"><div class="tx-icon" style="background:var(--${tColor(t.type)}-bg)">${tIcon(t.type)}</div>
+    return`<div class="tx-item" onclick="editTx('${t.id}')"><div class="tx-icon" style="background:var(--${tColor(t.type)}-bg)">${tIcon(t.type)}</div>
       <div class="tx-body"><div class="tx-desc">${t.description}</div><div class="tx-meta">Vence: <span style="color:${late?'var(--expense)':'inherit'};font-weight:${late?800:400}">${fmtDate(due)}</span></div></div>
       <div class="tx-right"><div class="tx-amount ${tColor(t.type)}">${fmt(t.amount)}</div>
-        <button class="btn btn-primary btn-sm" style="margin-top:4px;padding:4px 10px;font-size:11px" onclick="markPaid('${t.id}','${t.type}')">${t.type==='income'?'Receber':'Pagar'}</button></div>
+        <div style="display:flex;gap:4px;margin-top:4px">
+          <button class="btn btn-primary btn-sm" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();markPaid('${t.id}','${t.type}')">${t.type==='income'?'Receber':'Pagar'}</button>
+          <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:12px" onclick="event.stopPropagation();editTx('${t.id}')" title="Editar">✏️</button>
+        </div></div>
     </div>`;}).join('')}</div>`;
 }
 function setBillsFilter(f,btn){S.billsFilter=f;document.querySelectorAll('#screen-bills .filter-chip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderBills()}
