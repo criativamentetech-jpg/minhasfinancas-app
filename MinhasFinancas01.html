@@ -841,6 +841,20 @@ input,select,textarea{font-family:var(--font)}
   <div class="sheet-body">
     <div class="form-group"><label class="form-label">Categoria *</label><select class="form-input form-select" id="budget-cat"></select></div>
     <div class="form-group"><label class="form-label">Valor planejado (R$) *</label><input class="form-input" id="budget-val" type="number" step="0.01" placeholder="500,00"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">A partir de (mês)</label>
+        <select class="form-input form-select" id="budget-month">
+          <option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Março</option>
+          <option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option>
+          <option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option>
+          <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Ano</label>
+        <select class="form-input form-select" id="budget-year"></select>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text-3);margin:-8px 0 12px">💡 Vale para este mês em diante até você definir um novo valor.</div>
     <button class="btn btn-primary btn-full btn-lg" onclick="saveBudget()" id="btn-save-budget">Salvar orçamento</button>
   </div>
 </div>
@@ -1716,18 +1730,28 @@ function renderInvestments(){
 }
 
 // BUDGET
+function effectiveBudget(catId,m,y){
+  const dt=y*100+m;
+  // Exact match first, then most recent before this month
+  return S.budgets.filter(b=>b.category_id===catId&&(b.year*100+b.month)<=dt)
+    .sort((a,b)=>(b.year*100+b.month)-(a.year*100+a.month))[0]||null;
+}
 function renderBudget(){
   document.getElementById('budget-month-label').textContent=mName(S.month,S.year);
-  const mb=S.budgets.filter(b=>b.month===S.month&&b.year===S.year);
+  // Collect all categories that have any budget record
+  const budgetCatIds=[...new Set(S.budgets.map(b=>b.category_id))];
   const fixedCats=S.categories.filter(c=>c.monthly_fixed>0&&c.type==='expense');
   // Merge entries
   const entries=[];const seen=new Set();
-  mb.forEach(b=>{
-    const c=S.categories.find(x=>x.id===b.category_id);if(!c)return;
-    seen.add(b.category_id);
-    const spent=txForMonth(S.month,S.year).filter(t=>t.category_id===b.category_id&&t.type==='expense'&&(t.status==='paid'||t.status==='received')).reduce((s,t)=>s+(+t.amount),0);
-    const limit=+b.planned_amount;const pct=limit>0?(spent/limit*100):0;
-    entries.push({c,spent,limit,pct,tag:'📊 Orçamento',budgetId:b.id});
+  budgetCatIds.forEach(catId=>{
+    const eff=effectiveBudget(catId,S.month,S.year);if(!eff)return;
+    const c=S.categories.find(x=>x.id===catId);if(!c)return;
+    seen.add(catId);
+    const spent=txForMonth(S.month,S.year).filter(t=>t.category_id===catId&&t.type==='expense'&&(t.status==='paid'||t.status==='received')).reduce((s,t)=>s+(+t.amount),0);
+    const limit=+eff.planned_amount;const pct=limit>0?(spent/limit*100):0;
+    const isExact=eff.month===S.month&&eff.year===S.year;
+    const sinceLabel=isExact?'':'· desde '+mShort(eff.month,eff.year)+'/'+eff.year;
+    entries.push({c,spent,limit,pct,tag:`📊 Orçamento ${sinceLabel}`.trim(),budgetId:eff.id,isInherited:!isExact});
   });
   fixedCats.forEach(c=>{
     if(seen.has(c.id))return;
@@ -2118,14 +2142,23 @@ function openBudgetModal(){
     return[`<option value="${p.id}">${p.icon||'📌'} ${p.name}</option>`,...kids.map(k=>`<option value="${k.id}">&nbsp;&nbsp;└ ${k.icon||'📌'} ${k.name}</option>`)];
   }).join('');
   document.getElementById('budget-cat').innerHTML=opts;
-  document.getElementById('budget-val').value='';openSheet('budget-sheet');
+  document.getElementById('budget-val').value='';
+  // Preenche seletor de mês/ano com o mês atual visualizado
+  document.getElementById('budget-month').value=S.month;
+  const yr=document.getElementById('budget-year');
+  const curY=S.year;
+  yr.innerHTML=[curY-1,curY,curY+1,curY+2].map(y=>`<option value="${y}" ${y===curY?'selected':''}>${y}</option>`).join('');
+  openSheet('budget-sheet');
 }
 async function saveBudget(){
-  const catId=document.getElementById('budget-cat').value;const val=parseFloat(document.getElementById('budget-val').value);
+  const catId=document.getElementById('budget-cat').value;
+  const val=parseFloat(document.getElementById('budget-val').value);
+  const month=parseInt(document.getElementById('budget-month').value);
+  const year=parseInt(document.getElementById('budget-year').value);
   if(!catId||!val){toast('Preencha todos os campos','error');return}
   const btn=document.getElementById('btn-save-budget');btn.disabled=true;btn.textContent='Salvando...';
   try{
-    const{error}=await S.sb.from('budgets').upsert({user_id:S.user.id,category_id:catId,month:S.month,year:S.year,planned_amount:val},{onConflict:'user_id,category_id,month,year'});
+    const{error}=await S.sb.from('budgets').upsert({user_id:S.user.id,category_id:catId,month,year,planned_amount:val},{onConflict:'user_id,category_id,month,year'});
     if(error)throw error;await loadBudgets();closeSheet('budget-sheet');renderBudget();toast('Orçamento salvo!','success');
   }catch(e){toast(e.message||'Erro','error')}finally{btn.disabled=false;btn.textContent='Salvar orçamento'}
 }
