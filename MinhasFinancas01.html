@@ -627,7 +627,7 @@ input,select,textarea{font-family:var(--font)}
     <div class="nav-item" data-nav="history" onclick="navigate('history')">
       <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><span>Extrato</span>
     </div>
-    <div class="nav-item nav-add" onclick="openQuickSheet()">
+    <div class="nav-item nav-add" onclick="openTransactionSheet('expense')">
       <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </div>
     <div class="nav-item" data-nav="reports" onclick="navigate('reports')">
@@ -697,6 +697,9 @@ input,select,textarea{font-family:var(--font)}
     <button class="type-tab" data-type="invest" onclick="setTxType('invest',this)">🟣 Investimento</button>
     <button class="type-tab" data-type="adjust" onclick="setTxType('adjust',this)">⚡ Ajuste saldo</button>
     <button class="type-tab" data-type="estorno" onclick="setTxType('estorno',this)">🔄 Estorno/Dev.</button>
+  </div>
+  <div id="tx-favs-wrap" style="display:none;padding:6px 16px 4px;border-bottom:1px solid var(--border)">
+    <div id="tx-favs" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:2px"></div>
   </div>
   <div class="sheet-body" id="tx-form" style="padding-top:16px"></div>
 </div>
@@ -1822,7 +1825,7 @@ function confirmDeleteAllData(){
 }
 
 // TX FORM
-function openTransactionSheet(type){S.txType=type||'expense';S.editId=null;document.querySelectorAll('.type-tab').forEach(b=>b.classList.toggle('active',b.dataset.type===S.txType));document.getElementById('tx-sheet-title').textContent='Novo lançamento';buildTxForm();openSheet('tx-sheet')}
+function openTransactionSheet(type){S.txType=type||'expense';S.editId=null;document.querySelectorAll('.type-tab').forEach(b=>b.classList.toggle('active',b.dataset.type===S.txType));document.getElementById('tx-sheet-title').textContent='Novo lançamento';renderTxFavs();buildTxForm();openSheet('tx-sheet')}
 function editTx(id){const t=S.transactions.find(x=>x.id===id);if(!t)return;S.editId=id;S.txType=t.type;document.querySelectorAll('.type-tab').forEach(b=>b.classList.toggle('active',b.dataset.type===S.txType));document.getElementById('tx-sheet-title').textContent='Editar lançamento';buildTxForm();openSheet('tx-sheet')}
 function setTxType(type,btn){S.txType=type;document.querySelectorAll('.type-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');buildTxForm()}
 function buildTxForm(){
@@ -1831,10 +1834,10 @@ function buildTxForm(){
   const accOpts=S.accounts.map(a=>`<option value="${a.id}" ${t?.account_id===a.id?'selected':''}>${a.name}</option>`).join('');
   const destOpts=S.accounts.map(a=>`<option value="${a.id}" ${t?.destination_account_id===a.id?'selected':''}>${a.name}</option>`).join('');
   const defAcc=type==='income'?S.settings.default_income_account_id:S.settings.default_expense_account_id;
-  const accOptsD=S.accounts.map(a=>`<option value="${a.id}" ${(t?.account_id||defAcc)===a.id?'selected':''}>${a.name}</option>`).join('');
+  const accOptsD=S.accounts.map(a=>`<option value="${a.id}" ${(t?.account_id||pf.acc||defAcc)===a.id?'selected':''}>${a.name}</option>`).join('');
   const cats=S.categories.filter(c=>c.type===(type==='income'?'income':type==='invest'?'investment':'expense')&&!c.parent_id); // estorno usa categorias de despesa
   const catOpts='<option value="">Sem categoria</option>'+cats.map(c=>{ const subs=S.categories.filter(s=>s.parent_id===c.id);
-    return`<option value="${c.id}" ${t?.category_id===c.id?'selected':''}>${c.icon||'📌'} ${c.name}</option>`+subs.map(s=>`<option value="${s.id}" ${t?.category_id===s.id?'selected':''}>&nbsp;&nbsp;└ ${s.name}</option>`).join('');}).join('');
+    return`<option value="${c.id}" ${(t?.category_id||pf.cat)===c.id?'selected':''}>${c.icon||'📌'} ${c.name}</option>`+subs.map(s=>`<option value="${s.id}" ${(t?.category_id||pf.cat)===s.id?'selected':''}>&nbsp;&nbsp;└ ${s.name}</option>`).join('');}).join('');
   let html='';
   if(type==='transfer'||type==='invest'){
     html=`<div style="background:var(--${type==='transfer'?'transfer':'invest'}-bg);border:1px solid var(--${type==='transfer'?'transfer':'invest'}-bd);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--${type==='transfer'?'transfer':'invest'});font-weight:700">${type==='transfer'?'⚠️ Transferência: não conta como receita nem despesa. Apenas move dinheiro.':'⚠️ Aplicação: retira da conta e registra como patrimônio.'}</div>
@@ -1932,7 +1935,7 @@ function buildTxForm(){
       </div>
     </div>`:''}`;
   }
-  html+=`<div style="display:flex;gap:8px;margin-top:4px"><button class="btn btn-primary flex-1 btn-lg" id="btn-save-tx" onclick="saveTx()" style="flex:1">${S.editId?'Salvar alterações':'Salvar lançamento'}</button>${S.editId?`<button class="btn btn-danger btn-lg" onclick="deleteTx('${S.editId}')">🗑️</button>`:''}</div>`;
+  html+=`<div style="display:flex;gap:8px;margin-top:4px"><button class="btn btn-primary flex-1 btn-lg" id="btn-save-tx" onclick="saveTx()" style="flex:1">${S.editId?'Salvar alterações':'Salvar lançamento'}</button>${S.editId?`<button class="btn btn-secondary btn-lg" onclick="repeatTx('${S.editId}')" title="Repetir lançamento">🔁</button><button class="btn btn-danger btn-lg" onclick="deleteTx('${S.editId}')">🗑️</button>`:''}</div>${!S.editId&&(S.txType==='expense'||S.txType==='income')?'<div style="text-align:center;margin-top:10px"><button onclick="saveTxFav()" style="background:none;border:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--text-3);padding:4px 8px">⭐ Salvar como favorito</button></div>':''}`;
   document.getElementById('tx-form').innerHTML=html;
   const tfAmt=document.getElementById('tf-amount');
   if(tfAmt)initMoneyInput(tfAmt,tfAmt.dataset.init,updateParcelasHint);
@@ -2109,7 +2112,12 @@ async function saveInvestment(){
 
 // BUDGET SHEET
 function openBudgetModal(){
-  document.getElementById('budget-cat').innerHTML=S.categories.filter(c=>c.type==='expense'&&!c.parent_id).map(c=>`<option value="${c.id}">${c.icon||'📌'} ${c.name}</option>`).join('');
+  const all=S.categories.filter(c=>c.type==='expense');
+  const opts=all.filter(c=>!c.parent_id).flatMap(p=>{
+    const kids=all.filter(c=>c.parent_id===p.id);
+    return[`<option value="${p.id}">${p.icon||'📌'} ${p.name}</option>`,...kids.map(k=>`<option value="${k.id}">&nbsp;&nbsp;└ ${k.icon||'📌'} ${k.name}</option>`)];
+  }).join('');
+  document.getElementById('budget-cat').innerHTML=opts;
   document.getElementById('budget-val').value='';openSheet('budget-sheet');
 }
 async function saveBudget(){
@@ -2236,6 +2244,46 @@ function saveQuickFav(){
 }
 function deleteQuickFav(idx){
   const favs=loadQuickFavs();favs.splice(idx,1);saveQuickFavsData(favs);renderQuickFavs();
+}
+function renderTxFavs(){
+  const favs=loadQuickFavs();
+  const wrap=document.getElementById('tx-favs-wrap');const el=document.getElementById('tx-favs');
+  if(!el||!wrap)return;
+  if(!favs.length){wrap.style.display='none';return}
+  wrap.style.display='block';
+  el.innerHTML=favs.map((f,i)=>{
+    const cat=S.categories.find(c=>c.id===f.categoryId);
+    const icon=cat?.icon||(f.type==='income'?'💚':'🔴');
+    return`<div style="display:flex;align-items:center;gap:4px;background:var(--bg-hover);border:1.5px solid var(--border);border-radius:999px;padding:5px 10px 5px 8px;white-space:nowrap;cursor:pointer;flex-shrink:0" onclick="applyTxFav(${i})">
+      <span style="font-size:14px">${icon}</span><span style="font-size:12px;font-weight:700;color:var(--text)">${f.name}</span>
+    </div>`;
+  }).join('');
+}
+function applyTxFav(idx){
+  const f=loadQuickFavs()[idx];if(!f)return;
+  S.txType=f.type;
+  document.querySelectorAll('.type-tab').forEach(b=>b.classList.toggle('active',b.dataset.type===f.type));
+  window._quickPrefill={desc:f.description,amount:0,acc:f.accountId,cat:f.categoryId};
+  buildTxForm();
+}
+function saveTxFav(){
+  const desc=document.getElementById('tf-desc')?.value?.trim();
+  const accId=document.getElementById('tf-acc')?.value;
+  const catId=document.getElementById('tf-cat')?.value;
+  if(!desc){toast('Preencha a descrição para nomear o favorito','error');return}
+  const favs=loadQuickFavs();
+  if(favs.find(f=>f.name===desc)){toast('Já existe um favorito com esse nome','error');return}
+  favs.push({name:desc,type:S.txType,accountId:accId||null,categoryId:catId||null,description:desc});
+  saveQuickFavsData(favs);renderTxFavs();
+  toast(`⭐ "${desc}" salvo como favorito`,'success');
+}
+function repeatTx(id){
+  const t=S.transactions.find(x=>x.id===id);if(!t)return;
+  S.editId=null;S.txType=t.type;
+  window._quickPrefill={desc:t.description,amount:t.amount,acc:t.account_id,cat:t.category_id};
+  document.querySelectorAll('.type-tab').forEach(b=>b.classList.toggle('active',b.dataset.type===t.type));
+  document.getElementById('tx-sheet-title').textContent='Repetir lançamento';
+  renderTxFavs();buildTxForm();openSheet('tx-sheet');
 }
 
 // CSV GENÉRICO
