@@ -1990,6 +1990,13 @@ function buildTxForm(){
       </div>
     </div>`:''}`;
   }
+  if(type==='expense'||type==='income'){
+    const checked=t?.include_in_reports===false?'checked':'';
+    html+=`<div style="display:flex;align-items:center;gap:8px;padding:12px 0 4px;border-top:0.5px solid var(--border);margin-top:8px">
+      <input type="checkbox" id="tf-passthrough" ${checked} style="width:16px;height:16px;cursor:pointer;flex-shrink:0">
+      <label for="tf-passthrough" style="font-size:13px;color:var(--text-2);cursor:pointer">Não é do meu bolso <span style="font-size:11px;color:var(--text-3)">(exclui de relatórios e orçamentos)</span></label>
+    </div>`;
+  }
   html+=`<div style="display:flex;gap:8px;margin-top:4px"><button class="btn btn-primary flex-1 btn-lg" id="btn-save-tx" onclick="saveTx()" style="flex:1">${S.editId?'Salvar alterações':'Salvar lançamento'}</button>${S.editId?`<button class="btn btn-secondary btn-lg" onclick="repeatTx('${S.editId}')" title="Repetir lançamento">🔁</button><button class="btn btn-danger btn-lg" onclick="deleteTx('${S.editId}')">🗑️</button>`:''}</div>${!S.editId&&(S.txType==='expense'||S.txType==='income')?'<div style="text-align:center;margin-top:10px"><button onclick="saveTxFav()" style="background:none;border:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--text-3);padding:4px 8px">⭐ Salvar como favorito</button></div>':''}`;
   document.getElementById('tx-form').innerHTML=html;
   const tfAmt=document.getElementById('tf-amount');
@@ -2024,7 +2031,8 @@ async function saveTx(){
       const rawTags=document.getElementById('tf-tags')?.value||'';
       const tags=rawTags.split(',').map(t=>t.trim()).filter(Boolean);
       const splits=getSplits();
-      data={user_id:S.user.id,type,description:desc,amount:Math.abs(amount),account_id:acc,category_id:document.getElementById('tf-cat')?.value||null,date_competence:date,date_cash:document.getElementById('tf-date-cash')?.value||null,due_date:document.getElementById('tf-due')?.value||null,paid_at:paid?(document.getElementById('tf-date-cash')?.value||date):null,status,classification:document.getElementById('tf-class')?.value||'variable',payment_method:document.getElementById('tf-method')?.value||null,notes:document.getElementById('tf-notes')?.value||null,tags,splits,include_in_reports:true,include_in_budget:true};
+      const passthrough=document.getElementById('tf-passthrough')?.checked||false;
+      data={user_id:S.user.id,type,description:desc,amount:Math.abs(amount),account_id:acc,category_id:document.getElementById('tf-cat')?.value||null,date_competence:date,date_cash:document.getElementById('tf-date-cash')?.value||null,due_date:document.getElementById('tf-due')?.value||null,paid_at:paid?(document.getElementById('tf-date-cash')?.value||date):null,status,classification:document.getElementById('tf-class')?.value||'variable',payment_method:document.getElementById('tf-method')?.value||null,notes:document.getElementById('tf-notes')?.value||null,tags,splits,include_in_reports:!passthrough,include_in_budget:!passthrough};
     }
     // Upload de anexo
     const attachFile=document.getElementById('tf-attachment')?.files?.[0];
