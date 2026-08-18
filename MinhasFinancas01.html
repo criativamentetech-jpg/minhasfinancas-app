@@ -618,7 +618,7 @@ input,select,textarea{font-family:var(--font)}
       <div class="card card-pad">
         <div style="font-size:15px;font-weight:800;margin-bottom:8px">Conta</div>
         <div style="font-size:13px;color:var(--text-2);margin-bottom:12px" id="sett-user-info"></div>
-        <div style="font-size:11px;color:var(--text-3);margin-bottom:8px;text-align:center">Versão: <strong>v20</strong></div>
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:8px;text-align:center">Versão: <strong>v23</strong></div>
         <button class="btn btn-secondary btn-full" style="margin-bottom:8px" onclick="forceAppUpdate()">🔄 Atualizar app (limpar cache)</button>
         <button class="btn btn-danger btn-full" onclick="confirmDeleteAllData()">🗑️ Apagar todos os dados</button>
       </div>
@@ -1359,16 +1359,29 @@ function renderUpcoming(){
       </div>
     </div>`;}).join('')}</div>`;
 }
-function txRow(t){
+function txRow(t, viewAccId){
   const tc=tColor(t.type);const cat=S.categories.find(c=>c.id===t.category_id);const acc=S.accounts.find(a=>a.id===t.account_id);
-  const sign=t.type==='income'?'+':t.type==='expense'?'-':'';
   const stCol={paid:'var(--income)',received:'var(--income)',pending:'var(--adjust)',overdue:'var(--expense)',scheduled:'var(--transfer)',forecast:'var(--text-3)',cancelled:'var(--text-3)'}[t.status]||'var(--text-3)';
   const attachIcon=t.attachment_url?`<a href="${t.attachment_url}" target="_blank" onclick="event.stopPropagation()" style="font-size:12px;text-decoration:none" title="Ver anexo">📎</a>`:'';
   const isPending=['pending','scheduled','forecast'].includes(t.status);
   const rowStyle=isPending?'opacity:0.55;border-left:3px solid var(--adjust);':'';
-  return`<div class="tx-item" onclick="editTx('${t.id}')" style="${rowStyle}">
+  const isPassthrough=t.include_in_reports===false&&(t.type==='income'||t.type==='expense');
+  let sign='',transferInfo='';
+  if(t.type==='transfer'||t.type==='invest'){
+    const destAcc=S.accounts.find(a=>a.id===t.destination_account_id);
+    const origAcc=S.accounts.find(a=>a.id===t.account_id);
+    if(viewAccId){
+      if(t.account_id===viewAccId)sign='−';
+      else if(t.destination_account_id===viewAccId)sign='+';
+    }
+    if(origAcc&&destAcc)transferInfo=`<span style="font-size:11px;color:var(--transfer);font-weight:700"> ${origAcc.name} → ${destAcc.name}</span>`;
+    else if(origAcc)transferInfo=`<span style="font-size:11px;color:var(--transfer);font-weight:700"> De: ${origAcc.name}</span>`;
+  }else{
+    sign=t.type==='income'?'+':t.type==='expense'?'-':'';
+  }
+  return`<div class="tx-item" onclick="editTx('${t.id}')" style="${rowStyle}${isPassthrough?'border-left:3px solid var(--text-3);opacity:0.75;':''}">
     <div class="tx-icon" style="background:var(--${tc}-bg)">${cat?.icon||tIcon(t.type)}</div>
-    <div class="tx-body"><div class="tx-desc" style="${isPending?'color:var(--text-2)':''}">${t.description}${attachIcon}</div><div class="tx-meta">${cat?cat.name+' · ':''}${fmtDate(t.date_competence)}${acc?' · '+acc.name:''}</div>${renderTags(t.tags||[])}</div>
+    <div class="tx-body"><div class="tx-desc" style="${isPending?'color:var(--text-2)':''}">${t.description}${attachIcon}${isPassthrough?'<span style="font-size:10px;color:var(--text-3);font-weight:700;margin-left:4px;vertical-align:middle">não é meu</span>':''}</div><div class="tx-meta">${cat?cat.name+' · ':''}${fmtDate(t.date_competence)}${transferInfo||acc?' · '+(acc?.name||''):''}</div>${renderTags(t.tags||[])}</div>
     <div class="tx-right"><div class="tx-amount ${tc}" style="${isPending?'opacity:0.7':''}">${sign}${fmt(t.amount)}</div><div style="font-size:11px;color:${stCol};font-weight:700;margin-top:2px">${statusLabel(t.status)}</div></div>
   </div>`;
 }
@@ -1443,12 +1456,12 @@ function renderHistory(){
       const dayAllTxs=allMonthTxsMap[d]||[];
       runBal+=txsNetBal(dayAllTxs,balAccId);
       const dt=ts.reduce((s,t)=>(t.type==='income'?s+(+t.amount):t.type==='expense'?s-(+t.amount):s),0);
-      return`<div><div style="padding:8px 16px;background:var(--bg-hover);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)"><span style="font-size:12px;font-weight:800;color:var(--text-2)">${fmtDate(d)}</span><div style="text-align:right"><div style="font-size:11px;font-weight:700;color:${dt>=0?'var(--income)':'var(--expense)'}">${dt>=0?'+':''}${fmt(dt)}</div><div style="font-size:10px;color:var(--text-3)">Saldo: <strong style="color:${runBal>=0?'var(--text-2)':'var(--expense)'}">${fmt(runBal)}</strong></div></div></div><div class="tx-list">${ts.map(txRow).join('')}</div></div>`;
+      return`<div><div style="padding:8px 16px;background:var(--bg-hover);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)"><span style="font-size:12px;font-weight:800;color:var(--text-2)">${fmtDate(d)}</span><div style="text-align:right"><div style="font-size:11px;font-weight:700;color:${dt>=0?'var(--income)':'var(--expense)'}">${dt>=0?'+':''}${fmt(dt)}</div><div style="font-size:10px;color:var(--text-3)">Saldo: <strong style="color:${runBal>=0?'var(--text-2)':'var(--expense)'}">${fmt(runBal)}</strong></div></div></div><div class="tx-list">${ts.map(t=>txRow(t,balAccId)).join('')}</div></div>`;
     }).join('');
   }else{
     el.innerHTML=sortedDays.map(([d,ts])=>{
-      const dt=ts.reduce((s,t)=>(t.type==='income'?s+(+t.amount):t.type==='expense'?s-(+t.amount):s),0);
-      return`<div><div style="padding:8px 16px;background:var(--bg-hover);display:flex;justify-content:space-between;border-bottom:1px solid var(--border)"><span style="font-size:12px;font-weight:800;color:var(--text-2)">${fmtDate(d)}</span><span style="font-size:12px;font-weight:800;color:${dt>=0?'var(--income)':'var(--expense)'}">${dt>=0?'+':''}${fmt(dt)}</span></div><div class="tx-list">${ts.map(txRow).join('')}</div></div>`;
+      const d_fmt=new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'});
+      return`<div><div style="padding:8px 16px;background:var(--bg-hover);display:flex;justify-content:space-between;border-bottom:1px solid var(--border)"><span style="font-size:12px;font-weight:800;color:var(--text-2)">${d_fmt}</span></div><div class="tx-list">${ts.map(t=>txRow(t,_histAccount||null)).join('')}</div></div>`;
     }).join('');
   }
 }
@@ -1944,10 +1957,11 @@ function buildTxForm(){
         ?`<option value="received" ${t?.status==='received'||!t?'selected':''}>Recebido</option><option value="pending" ${t?.status==='pending'?'selected':''}>Pendente</option><option value="scheduled" ${t?.status==='scheduled'?'selected':''}>Agendado</option>`
         :`<option value="paid" ${t?.status==='paid'||!t?'selected':''}>Pago</option><option value="pending" ${t?.status==='pending'?'selected':''}>Pendente</option><option value="scheduled" ${t?.status==='scheduled'?'selected':''}>Agendado</option><option value="overdue" ${t?.status==='overdue'?'selected':''}>Atrasado</option>`}</select></div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Categoria</label><select class="form-input form-select" id="tf-cat">${catOpts}</select></div>
-      <div class="form-group"><label class="form-label">Tipo</label><select class="form-input form-select" id="tf-class"><option value="variable" ${t?.classification==='variable'||!t?'selected':''}>Variável</option><option value="fixed" ${t?.classification==='fixed'?'selected':''}>Fixo</option><option value="occasional" ${t?.classification==='occasional'?'selected':''}>Eventual</option></select></div>
+    <div class="form-group">
+      <label class="form-label">Categoria</label>
+      ${(()=>{const initId=t?.category_id||pf.cat||'';const initObj=initId?S.categories.find(c=>c.id===initId):null;const initLabel=initObj?`${initObj.icon||''} ${initObj.name}`.trim():'';return`<input class="form-input" id="tf-cat-search" type="text" placeholder="Buscar categoria..." autocomplete="off" value="${initLabel}" oninput="filterCatList()" onfocus="filterCatList()" onblur="setTimeout(()=>{const l=document.getElementById('tf-cat-list');if(l)l.style.display='none'},160)"><input type="hidden" id="tf-cat" value="${initId}"><div id="tf-cat-list" style="display:none;max-height:200px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;background:var(--bg-card);margin-top:4px"></div>`;})()}
     </div>
+    <div class="form-group"><label class="form-label">Tipo</label><select class="form-input form-select" id="tf-class"><option value="variable" ${t?.classification==='variable'||!t?'selected':''}>Variável</option><option value="fixed" ${t?.classification==='fixed'?'selected':''}>Fixo</option><option value="occasional" ${t?.classification==='occasional'?'selected':''}>Eventual</option></select></div>
     ${type==='expense'?`<div class="form-row"><div class="form-group"><label class="form-label">Vencimento</label><input class="form-input" id="tf-due" type="date" value="${t?.due_date||''}"></div><div class="form-group"><label class="form-label">Forma pagamento</label><select class="form-input form-select" id="tf-method"><option value="">—</option><option value="pix">Pix</option><option value="debit">Débito</option><option value="credit">Crédito</option><option value="transfer">TED/DOC</option><option value="cash">Dinheiro</option><option value="boleto">Boleto</option></select></div></div>`:''}
     ${type==='expense'&&!S.editId?`<div style="margin-bottom:14px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700">
@@ -2003,7 +2017,7 @@ function buildTxForm(){
   if(tfAmt)initMoneyInput(tfAmt,tfAmt.dataset.init,updateParcelasHint);
   const tfDate=document.getElementById('tf-date');
   const tfDateCash=document.getElementById('tf-date-cash');
-  if(tfDate&&tfDateCash)tfDate.addEventListener('input',()=>{if(tfDateCash.value===''||tfDateCash.value===tfDate._prev)tfDateCash.value=tfDate.value;tfDate._prev=tfDate.value;});
+  if(tfDate&&tfDateCash)tfDate.addEventListener('input',()=>{tfDateCash.value=tfDate.value;});
 }
 async function saveTx(){
   const type=S.txType;const btn=document.getElementById('btn-save-tx');if(btn){btn.disabled=true;btn.textContent='Salvando...'}
@@ -2338,6 +2352,39 @@ function renderTxFavs(){
 function deleteTxFav(idx){
   const favs=loadQuickFavs();favs.splice(idx,1);saveQuickFavsData(favs);renderTxFavs();
   toast('Favorito removido','');
+}
+function filterCatList(){
+  const searchEl=document.getElementById('tf-cat-search');
+  const listEl=document.getElementById('tf-cat-list');
+  if(!listEl||!searchEl)return;
+  const q=(searchEl.value||'').toLowerCase().trim();
+  const txType=S.txType;
+  const catType=txType==='income'?'income':txType==='invest'?'investment':'expense';
+  const parents=S.categories.filter(c=>c.type===catType&&!c.parent_id);
+  const items=[];
+  items.push({id:'',label:'— Sem categoria',indent:false,prefix:''});
+  parents.forEach(p=>{
+    items.push({id:p.id,label:`${p.icon||''} ${p.name}`.trim(),indent:false,prefix:''});
+    S.categories.filter(s=>s.parent_id===p.id).forEach(s=>{
+      items.push({id:s.id,label:`${s.icon||''} ${s.name}`.trim()||s.name,indent:true,prefix:p.name+' › '});
+    });
+  });
+  const filtered=q?items.filter(x=>x.label.toLowerCase().includes(q)||x.prefix.toLowerCase().includes(q)):items;
+  if(!filtered.length){listEl.style.display='none';return;}
+  listEl.style.display='block';
+  listEl.innerHTML=filtered.map(x=>{
+    const esc=s=>s.replace(/'/g,"\\'");
+    return`<div style="padding:10px 12px ${x.indent?';padding-left:28px':''};font-size:13px;cursor:pointer;border-bottom:0.5px solid var(--border)" onpointerdown="selectCatItem('${esc(x.id)}','${esc(x.label)}')" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''"><span${x.indent?" style='color:var(--text-3);margin-right:4px'":''}>
+      ${x.indent?'└ ':''}</span>${x.label}${x.prefix?`<span style="font-size:11px;color:var(--text-3);margin-left:6px">${x.prefix.slice(0,-3)}</span>`:''}</div>`;
+  }).join('');
+}
+function selectCatItem(id,label){
+  const h=document.getElementById('tf-cat');
+  const s=document.getElementById('tf-cat-search');
+  const l=document.getElementById('tf-cat-list');
+  if(h)h.value=id;
+  if(s)s.value=id?label:'';
+  if(l)l.style.display='none';
 }
 function applyTxFav(idx){
   const f=loadQuickFavs()[idx];if(!f)return;
